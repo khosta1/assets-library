@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .analyse import ImportPlan, icon_source
 from .hashing import _hasher, algo, file_hash
-from .model import Asset, expand, to_token
+from .model import Asset, expand, res_width, to_token
 from .naming import unique_name
 from .thumbnail import make_thumb
 
@@ -84,7 +84,8 @@ def _convert_normal_dx_to_gl(path: Path) -> bool:
 
 
 
-def bind(asset: Asset, dest: str, slot=None, lod=None, udim=None) -> None:
+def bind(asset: Asset, dest: str, slot=None, lod=None, udim=None, res=None,
+         variant=None) -> None:
     """Point asset.json at one file that now lives at `dest` inside the package.
 
     Shared by commit (creating) and edit (mutating) so there is exactly one
@@ -105,23 +106,47 @@ def bind(asset: Asset, dest: str, slot=None, lod=None, udim=None) -> None:
     if lod:
         # LOD-tagged files are recorded per level, so an adapter can build a
         # detail switch without parsing filenames.
-        level = asset.lods.setdefault(str(lod), {"geo": None, "textures": {}})
+        level = asset.lods.setdefault(
+            str(lod), {"geo": None, "representations": [], "textures": {}})
         if slot:
             level["textures"][slot] = dest
         elif dest.startswith("geo/"):
-            level["geo"] = dest
+            # Appended, never assigned. This was `level["geo"] = dest`, and a
+            # level shipping both .fbx and .obj bound one and silently
+            # overwrote the other: two files on disk, one with nothing pointing
+            # at it, and no conflict raised because the two destinations were
+            # different. Which of them is THE geometry is settled afterwards by
+            # _promote_lod_geo, like every other pointer that has to choose.
+            level.setdefault("representations", []).append(
+                {"file": dest, "format": Path(dest).suffix.lstrip("."),
+                 "role": "", "variant": variant}
+            )
         return
 
     if slot:
-        asset.textures[slot] = dest
+        if res:
+            # Recorded per size; which of them is THE texture is settled once,
+            # afterwards, by _promote_best_resolution. Deciding it here would
+            # mean depending on the order actions happen to arrive in.
+            asset.resolutions.setdefault(slot, {})[res] = dest
+        else:
+            asset.textures[slot] = dest
     elif dest.startswith("geo/") or "/" not in dest:
         # A file at the package root is the primary of a single-file type
         # (area.ies). Without this nothing in asset.json points at it and an
         # adapter would have to guess the filename - which is the one thing
         # the library exists to make unnecessary.
+        # Same distinction as _promote_lod_geo: a different format is an
+        # exchange, a different variant is a variant.
+        if not asset.representations:
+            role = "primary"
+        elif variant != asset.representations[0].get("variant"):
+            role = "variant"
+        else:
+            role = "exchange"
         asset.representations.append(
             {"file": dest, "format": Path(dest).suffix.lstrip("."),
-             "role": "primary" if not asset.representations else "exchange"}
+             "role": role, "variant": variant}
         )
 
 
@@ -165,11 +190,65 @@ def _promote_hero_lod(asset: Asset) -> None:
     hero = asset.lods[min(asset.lods, key=lambda k: int(k))]
     if not asset.textures:
         asset.textures.update(hero.get("textures") or {})
-    if not asset.representations and hero.get("geo"):
-        asset.representations.append(
-            {"file": hero["geo"], "format": Path(hero["geo"]).suffix.lstrip("."),
-             "role": "primary"}
-        )
+    if not asset.representations:
+        # Every format the hero level holds, not only its primary - the top
+        # level is a list precisely so it can carry them all, and dropping the
+        # exchange formats here would reintroduce the loss this fix removed one
+        # layer up.
+        for entry in hero.get("representations") or []:
+            if entry.get("file"):
+                asset.representations.append(dict(entry))
+        if not asset.representations and hero.get("geo"):
+            asset.representations.append(
+                {"file": hero["geo"], "format": Path(hero["geo"]).suffix.lstrip("."),
+                 "role": "primary"}
+            )
+
+
+def _promote_lod_geo(asset: Asset) -> None:
+    """Name one geometry file per level `geo`, and role the rest.
+
+    `geo` stays a scalar because everything already reads it that way - roles(),
+    verify, the hero promotion, and any adapter written against the schema. The
+    list beside it is what stops a second format being lost.
+
+    First bound wins. That is arbitrary, and deliberately left arbitrary: there
+    is no format ranking for geometry anywhere in this project - `primary_ext`
+    in types.json is a membership list whose order is never read - and inventing
+    one here, in a bug fix, would bury a decision in a place nobody would look
+    for it. An asset with one format per level, which is nearly all of them,
+    cannot tell the difference.
+    """
+    for level in (asset.lods or {}).values():
+        entries = (level or {}).get("representations") or []
+        if not entries:
+            continue
+        # "exchange" means ANOTHER FORMAT of the same thing - a .obj beside the
+        # .fbx. A second VARIANT is not that: Big and Small are two versions of
+        # the asset, both wanted, and calling the second an exchange format
+        # would tell an adapter it may pick either one interchangeably.
+        head = entries[0]
+        head["role"] = "primary"
+        for entry in entries[1:]:
+            entry["role"] = ("variant" if entry.get("variant") != head.get("variant")
+                             else "exchange")
+        level["geo"] = head["file"]
+
+
+def _promote_best_resolution(asset: Asset) -> None:
+    """Point textures[slot] at the biggest size of that slot.
+
+    The same move as _promote_hero_lod and for the same reason: everything that
+    reads an asset - the browser, verify, the icon picker, a future Houdini
+    adapter - gets the best version without having to know a second dimension
+    exists. `resolutions` still holds every size including this one, so nothing
+    is hidden and nothing is copied on disk; only the pointer is duplicated.
+    """
+    for slot, sizes in (asset.resolutions or {}).items():
+        if not sizes:
+            continue
+        best = max(sizes, key=res_width)
+        asset.textures[slot] = sizes[best]
 
 
 def commit(plan: ImportPlan, cfg, tags=None, dry_run: bool = False,
@@ -224,8 +303,11 @@ def commit(plan: ImportPlan, cfg, tags=None, dry_run: bool = False,
         asset.hashes[action.dest], gone = _place_and_hash(action.src, dst, take)
         if take and not gone:
             consumed.append(action.src)
-        bind(asset, action.dest, action.slot, action.lod, action.udim)
+        bind(asset, action.dest, action.slot, action.lod, action.udim,
+             action.res, action.variant)
 
+    _promote_lod_geo(asset)
+    _promote_best_resolution(asset)
     _promote_hero_lod(asset)
 
     # Normals: the library stores OpenGL only. If a source supplied DirectX and

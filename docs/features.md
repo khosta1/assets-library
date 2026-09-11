@@ -13,8 +13,8 @@ REMOVED    deleted, listed so it does not get reinvented
 
 `ROADMAP.md` is what is being BUILT. This file is what EXISTS.
 
-Last brought in line: **2026-09-11**. ~5 050 lines; the library holds 8 assets
-and verifies clean.
+Last brought in line: **2026-09-12**. ~5 200 lines; the library holds 57
+assets and verifies clean apart from three orphan warnings (see `ROADMAP.md`).
 
 ---
 
@@ -25,6 +25,19 @@ and verifies clean.
   Nothing is written before the Add button.
 - **LODs end to end** — stripped from vendor names, recorded per level,
   re-emitted as `_lodN`; hero LOD promoted by `commit._promote_hero_lod()`.
+- **Multiple resolutions per slot** — schema v4. Every size kept, labelled
+  from the measured pixel width (`16k`), re-emitted as `_<res>` before the
+  UDIM tile; biggest promoted into `textures[slot]` by
+  `commit._promote_best_resolution()`. `res:4k` asks *has this size*.
+- **Geometry variants** — schema v6. A second version of one asset (Big/Small,
+  Var01) is kept rather than losing the format contest, keyed
+  `(ext, lod, variant)` and named `<asset>_<variant>[_lodN].<ext>`. Pre-filled
+  from `variant_patterns`, overridable per row in the **Var** column. `role`
+  distinguishes `variant` from `exchange`.
+- **Geometry recognised on every type** — `geometry_ext` in `types.json` routes
+  19 mesh formats to `geo/` regardless of the declared type, and `geometry`
+  is a binding target in its own right rather than a second name for
+  "main file". Fixes vegetation assets losing every mesh to `extra/`.
 - **Editing** (Ctrl+E) — re-analysis and diff, staged through `_editing/old/`,
   which is destroyed last.
 - **Deleting** (Shift+Del) — explicit, confirmed, file list shown first.

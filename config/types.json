@@ -20,6 +20,9 @@
     "icon": "No preview possible; use the type icon."
   },
 
+  "geometry_ext": [".obj", ".fbx", ".abc", ".usd", ".usda", ".usdc", ".usdz", ".ply", ".stl", ".gltf", ".glb", ".blend", ".ma", ".mb", ".3ds", ".dae", ".lwo", ".c4d", ".max"],
+  "_geometry_ext": "What ROUTING treats as geometry: any file with one of these extensions lands in geo/, whatever the asset's type. Separate from each type's primary_ext, which answers a DIFFERENT question - what makes this type detectable. Conflating the two is what sent every .fbx in a vegetation asset to extra/: vegetation's primary_ext is .spm/.st/.st9/.srt, the SpeedTree formats, so no mesh file was ever recognised. Also separate from mesh_extensions() in analyse.py, which excludes USD sidecars so a 2.5KB .usdc cannot make a texture set look like a model - that is detection, this is routing, and they must not be merged back together.",
+
   "types": [
     {
       "id": "texture",

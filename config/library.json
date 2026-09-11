@@ -55,6 +55,9 @@
       "collapse repeated underscores",
       "trim leading/trailing underscores"
     ],
+    "variant_patterns": ["big", "small", "medium", "large", "tall", "wide", "var\\d+", "variant\\d+", "v\\d{2,}", "alt\\d*"],
+    "_variant_patterns": "A variant is a SECOND version of the same asset that must be kept, not a lower-quality one to discard. Megascans ships DactylisGlomerata_hznoe_Big_lod0_OL.fbx and _Small_lod0_OL.fbx: same textures, two meshes, three LODs each. Without this the second one lost the (ext, lod) contest and half the asset never imported. Matched after UDIM, resolution and LOD are already off the stem, and the result is only a PRE-FILL - the Var column in the Add window is what actually decides, because a token that looks like a variant and is part of the name is exactly the mistake a person catches in one glance and a pattern never will.",
+
     "strip_tokens": ["1k", "2k", "4k", "8k", "16k", "png", "jpg", "jpeg", "exr", "tif", "hires", "lowres", "final", "new", "copy", "v01", "(1)", "(2)"],
     "_strip_tokens": "Resolution and format belong in metadata as searchable fields, never in the folder name. Two resolutions of the same asset must resolve to the SAME name so they merge into one asset with variants instead of becoming duplicates.",
     "examples": {

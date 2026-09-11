@@ -39,7 +39,7 @@ between the layers, marks design rules **RULE**, and ends with the
 | `assetlib/analyse.py` | source files → `ImportPlan` (READ-ONLY), rebind, set_lod |
 | `assetlib/commit.py` | `ImportPlan` → new package; `bind()`, `_promote_hero_lod()` |
 | `assetlib/edit.py` | mutate an existing package; `delete_asset()` |
-| `assetlib/model.py` | `asset.json` (schema v2), `migrate()`, `roles()`, `iter_assets()` |
+| `assetlib/model.py` | `asset.json` (schema v4), `migrate()`, `roles()`, `iter_assets()` |
 | `assetlib/upgrade.py` | brings every `asset.json` **on disk** up to schema; `.assetlib/state.json` marks the version last fully applied |
 | `assetlib/index.py` | SQLite + FTS5, search filters, counts |
 | `assetlib/verify.py` | invariant checks |
@@ -110,6 +110,9 @@ OpenEXR 3.4.14, xxhash 4.0.1.
 - **`plan` at the end of a request means plan only.** Write the approach, change
   nothing — no edits, no commits. Reading and searching to build the plan is
   fine. Absent the word, work as normal.
+- **`short` at the end of a request means ultra concise.** Answer in the fewest
+  words that carry the answer — no preamble, no restatement, no options. Absent
+  the word, answer as normal.
 - **No verification loops.** Do not write or run a test, a benchmark or a probe
   script without asking first. One pass, one report; Felix observes the app.
 - **Check `docs/gotchas.md` before debugging an import.** Twelve of them are

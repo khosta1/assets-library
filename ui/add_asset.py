@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
 from assetlib import index as idx
 from assetlib.analyse import (BONUS, PREVIEW_TARGET, SKIP, analyse, conflicts,
                               current_target, derive_name, rebind, set_key,
-                              set_lod, targets_for)
+                              set_lod, set_variant, targets_for)
 from assetlib.commit import commit
 from assetlib.model import Asset, to_token
 from assetlib.naming import normalise
@@ -41,8 +41,8 @@ from . import writepool
 from .gridmodel import _human
 
 ACTION_ROLE = Qt.UserRole + 30
-COL_FILE, COL_DEST, COL_TARGET, COL_LOD, COL_SIZE = range(5)
-HEADERS = ["File", "Goes to", "Binding", "LOD", "Size"]
+COL_FILE, COL_DEST, COL_TARGET, COL_LOD, COL_VAR, COL_RES, COL_SIZE = range(7)
+HEADERS = ["File", "Goes to", "Binding", "LOD", "Var", "Res", "Size"]
 NO_LOD = "—"
 MAX_LOD = 9
 
@@ -248,6 +248,16 @@ class FileTableModel(QAbstractTableModel):
                 return current_target(a)
             if col == COL_LOD:
                 return str(a.lod) if a.lod else NO_LOD
+            if col == COL_VAR:
+                # Pre-filled from the filename, blank when nothing matched.
+                # Editable, because a token that looks like a variant and is
+                # part of the real name is a mistake only a person catches.
+                return a.variant or ""
+            if col == COL_RES:
+                # Blank, not a dash, when the slot holds one size: a token is
+                # only assigned when there is something to tell apart, and an
+                # em-dash in every row would read as "no resolution known".
+                return a.res or ""
             if col == COL_SIZE:
                 return _human(row.size)
         if role == Qt.ForegroundRole and a.action == "reject":
@@ -262,7 +272,7 @@ class FileTableModel(QAbstractTableModel):
 
     def flags(self, index):
         base = super().flags(index)
-        if index.column() in (COL_TARGET, COL_LOD):
+        if index.column() in (COL_TARGET, COL_LOD, COL_VAR):
             return base | Qt.ItemIsEditable
         return base
 
@@ -316,6 +326,38 @@ class LodDelegate(QStyledItemDelegate):
         self.dialog.set_lod_one(model.rows[index.row()], editor.currentData())
 
 
+class VariantDelegate(QStyledItemDelegate):
+    """Which VERSION of the asset a file belongs to.
+
+    A third dimension beside slot and LOD. Megascans ships a Big and a Small
+    mesh of one plant across three levels each, sharing one texture set; the two
+    are one asset and both have to be kept.
+
+    Editable rather than a fixed list: the vendor words are unbounded (Big,
+    Small, Var01, alt2) and the pre-fill is a guess. Values already present in
+    the plan are offered so a typed one cannot drift from a detected one.
+    """
+
+    def __init__(self, dialog):
+        super().__init__(dialog)
+        self.dialog = dialog
+
+    def createEditor(self, parent, option, index):
+        combo = QComboBox(parent)
+        combo.setEditable(True)
+        combo.addItem("")
+        for value in self.dialog.variants_seen():
+            combo.addItem(value)
+        return combo
+
+    def setEditorData(self, editor, index):
+        editor.setEditText(index.data(Qt.EditRole) or "")
+
+    def setModelData(self, editor, model, index):
+        self.dialog.set_variant_one(model.rows[index.row()],
+                                    editor.currentText().strip())
+
+
 # -------------------------------------------------------------- commit worker
 
 
@@ -367,6 +409,7 @@ class AddAssetDialog(QDialog):
         self._bonus: list = []
         self._overrides: dict = {}      # src path -> target, survives a replan
         self._lods: dict = {}           # src path -> level, survives a replan
+        self._variants: dict = {}       # src path -> variant, survives a replan
         self._preview: Path | None = None
         self._worker = None
         self._name_touched = False      # once you type a name, we stop guessing
@@ -440,10 +483,13 @@ class AddAssetDialog(QDialog):
         self.table.verticalHeader().setVisible(False)
         self.table.setItemDelegateForColumn(COL_TARGET, TargetDelegate(self))
         self.table.setItemDelegateForColumn(COL_LOD, LodDelegate(self))
+        self.table.setItemDelegateForColumn(COL_VAR, VariantDelegate(self))
         self.table.setColumnWidth(COL_FILE, 280)
         self.table.setColumnWidth(COL_DEST, 300)
         self.table.setColumnWidth(COL_TARGET, 150)
         self.table.setColumnWidth(COL_LOD, 60)
+        self.table.setColumnWidth(COL_VAR, 80)
+        self.table.setColumnWidth(COL_RES, 60)
 
         self.remove_btn = QPushButton("Remove selected")
         self.remove_btn.clicked.connect(self._remove_selected)
@@ -564,11 +610,12 @@ class AddAssetDialog(QDialog):
                 self._bonus = [f for f in self._bonus if f != src]
                 self._overrides.pop(src, None)
                 self._lods.pop(src, None)
+                self._variants.pop(src, None)
         self._replan()
 
     def _clear_files(self) -> None:
         self._files, self._bonus = [], []
-        self._overrides, self._lods = {}, {}
+        self._overrides, self._lods, self._variants = {}, {}, {}
         self._replan()
 
     # ---------------------------------------------------------------- preview
@@ -654,11 +701,16 @@ class AddAssetDialog(QDialog):
             return
 
         for action in self.plan.actions:
-            # LOD first: it feeds into the destination the binding computes.
+            # LOD and variant first: both feed into the destination the binding
+            # computes, so patching them after the rebind would leave the row
+            # showing one thing and the file going somewhere else.
             if action.src in self._lods:
                 action.lod = self._lods[action.src] or None
+            if action.src in self._variants:
+                action.variant = self._variants[action.src] or None
             target = self._overrides.get(action.src)
-            if target is None and action.src in self._lods:
+            if target is None and (action.src in self._lods
+                                   or action.src in self._variants):
                 target = current_target(action)
             if target:
                 try:
@@ -709,6 +761,21 @@ class AddAssetDialog(QDialog):
                 self._bonus.remove(action.src)
                 self._files.append(action.src)
             rebind(self.plan, action, target, self.cfg)
+        self._row_changed(row)
+
+    def variants_seen(self) -> list:
+        """Variant names already in the plan, for the dropdown."""
+        if self.plan is None:
+            return []
+        return sorted({a.variant for a in self.plan.actions if a.variant})
+
+    def set_variant_one(self, row, variant) -> None:
+        """Called by the delegate when a row's variant changes."""
+        if self.plan is None:
+            return
+        for action in row.actions:
+            self._variants[action.src] = variant or None
+            set_variant(self.plan, action, variant, self.cfg)
         self._row_changed(row)
 
     def set_lod_one(self, row, lod) -> None:

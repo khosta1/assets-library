@@ -25,6 +25,7 @@ class SlotMatcher:
         self.preview_rules = s.get("preview_rules", {})
         m = s.get("matching", {})
         self.udim_patterns = [re.compile(p) for p in m.get("udim_patterns", [])]
+        self.res_patterns = [re.compile(p) for p in m.get("res_patterns", [])]
         low, high = m.get("udim_range", [1001, 1999])
         self.udim_range = (int(low), int(high))
         self.min_slots = int(m.get("min_slots_for_texture_set", 2))
@@ -59,17 +60,37 @@ class SlotMatcher:
         """
         stem = Path(filename).stem.lower()
         probe = stem + "."
+        tile = None
+
         for pattern in self.udim_patterns:
             found = pattern.search(probe)
             if not found:
                 continue
-            tile = self._tile(found)
-            if tile is None:
+            number = self._tile(found)
+            if number is None:
                 continue                     # a 4-digit number that is not a tile
-            cleaned = probe[:found.start()] + "_" + probe[found.end():]
-            cleaned = re.sub(r"[_.]+", "_", cleaned).strip("_.")
-            return cleaned, f"{tile:04d}"
-        return stem, None
+            probe = probe[:found.start()] + "_" + probe[found.end():]
+            tile = f"{number:04d}"
+            break
+
+        # Resolution and bit-depth come off here rather than in match(), because
+        # the stem is what decides whether two files are the SAME map. Megascans
+        # ships one albedo at 2048/4096/8192/16384ppm; with those tokens left in
+        # they are four different stems, _settle_competing reads them as four
+        # maps fighting for one slot, and three of every four are banked into
+        # extra/. The token is discarded, never believed - the resolution that
+        # gets recorded is measured from the pixels.
+        stripped = False
+        for pattern in self.res_patterns:
+            probe, hits = pattern.subn("_", probe)
+            stripped = stripped or bool(hits)
+
+        if tile is None and not stripped:
+            # Nothing was taken out, so return the stem untouched. Running it
+            # through the separator squash would turn 'my.texture' into
+            # 'my_texture' and silently change every name derived from it.
+            return stem, None
+        return re.sub(r"[_.]+", "_", probe).strip("_."), tile
 
     def match(self, filename: str, asset_base: str | None = None):
         """Return (slot_key | PREVIEW | None, udim, variant)."""
@@ -123,14 +144,22 @@ class SlotMatcher:
         return self.by_key.get(key, {}).get("keep")
 
     def output_filename(self, asset: str, key: str, ext: str, udim: str | None = None,
-                        lod: int | None = None) -> str:
-        """<asset>[_lodN]_<slot>[.udim].<ext>
+                        lod: int | None = None, res: str | None = None) -> str:
+        """<asset>[_lodN]_<slot>[_<res>][.udim].<ext>
 
         The LOD token sits before the slot so a directory listing groups a
         level's maps together, which is how you actually read them. An asset
         without LODs gets no token at all.
+
+        The resolution token sits AFTER the slot and BEFORE the tile, and that
+        order is not cosmetic: the tile has to stay the last dot-segment before
+        the extension or `<UDIM>` stops being the spelling Houdini, Karma,
+        Arnold and Mari resolve natively. `res` is passed only when the slot
+        actually holds more than one size - a single-resolution asset keeps the
+        name it has always had, so nothing already in the library renames.
         """
         suffix = self.output_names.get(key, key)
         tile = f".{udim}" if udim else ""
         level = f"_lod{lod}" if lod else ""
-        return f"{asset}{level}_{suffix}{tile}{ext.lower()}"
+        size = f"_{res}" if res else ""
+        return f"{asset}{level}_{suffix}{size}{tile}{ext.lower()}"

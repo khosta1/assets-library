@@ -39,6 +39,7 @@ class Config:
         self.library_cfg = raw["library"]
         self.types = raw["types"]["types"]
         self.type_by_id = {t["id"]: t for t in self.types}
+        self.geometry_ext = {e.lower() for e in raw["types"].get("geometry_ext", [])}
         self.categories = raw["categories"]["categories"]
         self.category_rules = raw["categories"].get("rules", {})
         self.slots_cfg = raw["texture_slots"]

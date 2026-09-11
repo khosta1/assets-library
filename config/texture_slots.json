@@ -13,6 +13,9 @@
     "udim_range": [1001, 1999],
     "_udim_patterns": "Matched against the stem with its delimiter restored, so the Mari convention 'name.1001.ext' is found. A pattern with TWO groups is the u/v form and the tile is computed as 1001 + (u-1) + (v-1)*10.",
     "_udim_range": "A four-digit number is only a UDIM tile inside this range. Without it 'brick_2048.png' and 'tex_8192.exr' read as tiles - resolution in a filename is far more common than a tile above 1999.",
+    "res_patterns": ["_\\d+ppm(?=[._]|$)", "_\\d+px(?=[._]|$)", "_\\d+k(?=[._]|$)", "_\\d+bit(?=[._]|$)"],
+    "_res_patterns": "Resolution and bit-depth tokens, stripped off the stem before anything is matched. Megascans ships ArctiumLappa_Albedo_8bit_2048ppm.png in four sizes; with the tokens left in, those are four DIFFERENT stems, _settle_competing reads them as four maps fighting for the diffuse slot, and three of every four land in extra/. Stripped, they are one map at four sizes. The token is thrown away, never trusted: the resolution that gets recorded is measured from the pixels, because ppm is pixels-per-metre and says nothing certain about the image.",
+
     "strip_before_match": ["(_|\\.)\\d{4}(_|\\.)", "_v\\d+$", "_\\d+k$"],
     "min_slots_for_texture_set": 2,
     "_min_slots": "A group of images is only promoted to a 'texture' asset when at least this many DISTINCT slots match. One lonely jpg is a 'reference', not a texture set."

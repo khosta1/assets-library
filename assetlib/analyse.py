@@ -15,8 +15,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .model import UDIM_TOKEN, to_token
-from .naming import guess_category, normalise, split_lod
+from .model import UDIM_TOKEN, res_label, res_width, to_token
+from .naming import guess_category, normalise, split_lod, split_variant
 from .slots import PREVIEW, SlotMatcher
 
 JUNK_EXTS = {".exe", ".msi", ".url", ".lnk", ".ini", ".db"}
@@ -36,6 +36,8 @@ class FileAction:
     slot: str | None = None
     lod: int | None = None    # level of detail, None when the asset has none
     udim: str | None = None   # "1001" when this file is one tile of a set
+    res: str | None = None    # "4k" when the slot holds more than one size
+    variant: str | None = None  # "big"/"small" - a second version to KEEP
     reason: str = ""
     size: int = 0
 
@@ -105,6 +107,22 @@ def _image_size(path: Path):
     from .thumbnail import dimensions
 
     return dimensions(path)
+
+
+def _measured_label(path: Path) -> str:
+    """The resolution label for one texture file, read from the pixels.
+
+    Not from the filename. Megascans writes `_16384ppm`, which is pixels per
+    metre and says nothing certain about the image; ambientCG writes `8K` and
+    Poly Haven `8k` for the same thing. slots.py has already stripped whichever
+    token was there, so the only honest source left is the header.
+
+    A file that cannot be measured gets an empty label, which groups every
+    unmeasurable file of a slot together and lets the format contest settle it
+    exactly as it did before resolutions existed.
+    """
+    size = _image_size(path)
+    return res_label(max(size)) if size else ""
 
 
 def mesh_extensions(cfg) -> set:
@@ -231,6 +249,10 @@ BONUS_REASON = "kept verbatim, not interpreted"
 # What a file may be bound to. Anything the library does not understand becomes
 # a bonus file rather than being thrown away - the user decides, not the tool.
 SKIP, BONUS, PREVIEW_TARGET, PRIMARY = "skip", "bonus", "preview", "primary"
+# Geometry is its own target, on every type. PRIMARY used to carry this job
+# and only for mesh types, so an .obj dropped into a texture asset could only
+# be sent to the package root or to extra/ - never to geo/, where it belongs.
+GEOMETRY = "geometry"
 
 
 def bonus_action(plan: ImportPlan, path: Path, size: int, why: str = "",
@@ -261,15 +283,21 @@ def current_target(action: FileAction) -> str:
         return BONUS
     if action.action == "preview":
         return PREVIEW_TARGET
-    return action.slot or PRIMARY
+    if action.slot:
+        return action.slot
+    return GEOMETRY if (action.dest or "").startswith("geo/") else PRIMARY
 
 
 def targets_for(plan: ImportPlan, cfg) -> list:
     """(value, label) pairs offered for one file, in menu order."""
     tdef = cfg.type_by_id[plan.type_id]
-    primary_label = "geometry" if tdef["ingest"] == "mesh_plus_textures" else "main file"
-    out = [
-        (PRIMARY, primary_label),
+    out = [(GEOMETRY, "geometry -> geo/")]
+    # A mesh type's "main file" IS its geometry, so offering both would be two
+    # names for one destination. Every other type keeps a main file that is not
+    # a mesh - an .ies profile, an .hdr, a ZBrush .psd - and needs the entry.
+    if tdef["ingest"] != "mesh_plus_textures":
+        out.append((PRIMARY, "main file"))
+    out += [
         (PREVIEW_TARGET, "preview image"),
         (BONUS, "bonus file -> extra/"),
         (SKIP, "skip - do not copy"),
@@ -294,6 +322,16 @@ def rebind(plan: ImportPlan, action: FileAction, target: str, cfg) -> None:
     # destination whose name has no tile in it.
     action.udim = None
 
+    # The size token survives only into another texture slot, and for the same
+    # reason. It also has to survive INTO one: rebinding one of four sizes to a
+    # different slot without it would compute the same destination as the other
+    # three, and conflicts() would block the whole import over a rename the
+    # user thought was local.
+    res, action.res = action.res, None
+    # Variant follows the same rule as the size token: it is part of a kept
+    # file's identity and meaningless once the file is bonus, icon or skipped.
+    variant, action.variant = action.variant, None
+
     if target == SKIP:
         action.action, action.dest, action.slot = "reject", None, None
         action.reason = "skipped by hand"
@@ -303,19 +341,22 @@ def rebind(plan: ImportPlan, action: FileAction, target: str, cfg) -> None:
         action.reason = BONUS_REASON
     elif target == PREVIEW_TARGET:
         action.action, action.slot, action.dest = "preview", None, "preview/thumb.jpg"
-    elif target == PRIMARY:
+    elif target in (PRIMARY, GEOMETRY):
         tdef = cfg.type_by_id[plan.type_id]
-        folder = "geo/" if tdef["ingest"] == "mesh_plus_textures" else ""
+        folder = "geo/" if (target == GEOMETRY
+                            or tdef["ingest"] == "mesh_plus_textures") else ""
         level = f"_lod{action.lod}" if action.lod else ""
-        action.action, action.slot = "keep", None
-        action.dest = f"{folder}{plan.name}{level}{action.src.suffix.lower()}"
+        which = f"_{variant}" if variant else ""
+        action.action, action.slot, action.variant = "keep", None, variant
+        action.dest = f"{folder}{plan.name}{which}{level}{action.src.suffix.lower()}"
     else:
         if target not in matcher.by_key:
             raise ValueError(f"unknown target {target!r}")
         _, udim, _ = matcher.match(action.src.name, plan.name)
         action.action, action.slot, action.udim = "keep", target, udim
+        action.res = res
         action.dest = "tex/" + matcher.output_filename(
-            plan.name, target, action.src.suffix.lower(), udim, action.lod
+            plan.name, target, action.src.suffix.lower(), udim, action.lod, res
         )
 
 
@@ -323,6 +364,46 @@ def _record_lods(plan: ImportPlan) -> None:
     levels = sorted({a.lod for a in plan.kept if a.lod})
     if levels:
         plan.fields["lods"] = levels
+
+
+def _record_resolutions(plan: ImportPlan) -> None:
+    """Both resolution fields, for every planner.
+
+    This lived inside the texture-set planner and nothing else called it, so a
+    model or a scan - which is most of this library, and every Megascans plant -
+    came out with no resolution metadata at all and answered no `res:` query.
+    Anything true of every asset belongs beside _record_lods, not inside one
+    branch.
+
+    `resolution` is the single biggest width: the index wants one sortable
+    scalar. `resolutions` is the set, and `res:4k` asks of it "is this one of
+    them", never "is it the largest".
+    """
+    base = next((a for a in plan.kept if a.slot == "diffuse"), None)
+    if base:
+        size = _image_size(base.src)
+        if size:
+            plan.fields["resolution"] = max(size)
+
+    sizes = {a.res for a in plan.kept if a.slot and a.res}
+    if not sizes and plan.fields.get("resolution"):
+        # One size, so no token was ever assigned - but the asset still has a
+        # resolution and must still be findable by it.
+        sizes = {res_label(plan.fields["resolution"])}
+    if sizes:
+        plan.fields["resolutions"] = sorted(sizes, key=res_width, reverse=True)
+
+
+def set_variant(plan: ImportPlan, action: FileAction, variant, cfg) -> None:
+    """Name this file's variant by hand, or clear it.
+
+    Normalised through the same rules as everything else, so a typed 'Big ' and
+    a detected 'big' cannot become two variants of one asset. Goes through
+    rebind() rather than patching the destination, exactly like set_lod.
+    """
+    variant = normalise(str(variant), cfg) if variant else None
+    action.variant = variant or None
+    rebind(plan, action, current_target(action), cfg)
 
 
 def set_lod(plan: ImportPlan, action: FileAction, lod, cfg) -> None:
@@ -390,7 +471,11 @@ def _bare_stem(path: Path, cfg, matcher: SlotMatcher) -> str:
     off before the files are asked what they have in common.
     """
     stem, _ = matcher._clean_stem(path.name)
-    return split_lod(stem, cfg)[0]
+    # Variant off as well as LOD: two variants are ONE asset, so both have to
+    # resolve to one name. Without this an asset shipping only Big would be
+    # called '..._big', and the day its Small arrived it would import as a
+    # second, unrelated asset.
+    return split_variant(split_lod(stem, cfg)[0], cfg)[0]
 
 
 def _settle_name(candidate: str, files, cfg) -> str:
@@ -521,29 +606,53 @@ def _emit_slot_actions(plan: ImportPlan, candidates: dict, matcher: SlotMatcher)
 
         entries = _settle_competing(plan, key, entries, matcher)
 
-        # UDIM tiles are all kept; a non-tiled slot keeps one winning format.
-        tiled = [e for e in entries if e[2]]
-        if tiled:
-            for path, size, udim, _, ext in tiled:
-                plan.actions.append(
-                    FileAction(path, "keep", slot=key, lod=lod, size=size, udim=udim,
-                               dest="tex/" + matcher.output_filename(
-                                   plan.name, key, ext, udim, lod))
-                )
-            continue
+        # One map, possibly at several sizes. Split by MEASURED width, never by
+        # the filename token: Megascans writes ppm (pixels per metre), ambientCG
+        # writes 8K, Poly Haven writes 8k, and none of them is a promise about
+        # the pixels. slots.py has already stripped whatever the token was.
+        by_res: dict = {}
+        for entry in entries:
+            by_res.setdefault(_measured_label(entry[0]), []).append(entry)
 
-        entries.sort(key=lambda e: matcher.format_rank(key, e[4]), reverse=True)
-        path, size, _, _, ext = entries[0]
-        plan.actions.append(
-            FileAction(path, "keep", slot=key, lod=lod, size=size,
-                       dest="tex/" + matcher.output_filename(plan.name, key, ext, None, lod))
-        )
-        where = f" of lod{lod}" if lod else ""
-        for path, size, _, _, ext in entries[1:]:
-            plan.actions.append(
-                FileAction(path, "reject", size=size, lod=lod,
-                           reason=f"duplicate of slot '{key}'{where} in a lower-priority format ({ext})")
+        # A single size gets no token at all, exactly like an asset with no
+        # LODs gets no _lodN - so nothing already in the library renames.
+        multi = len(by_res) > 1
+        if multi:
+            plan.warnings.append(
+                f"{key}: {len(by_res)} resolutions kept ("
+                + ", ".join(sorted(by_res, key=res_width, reverse=True)) + ")"
             )
+
+        for res, group in sorted(by_res.items(), key=lambda kv: res_width(kv[0]), reverse=True):
+            token = res if multi else None
+
+            # UDIM tiles are all kept; a non-tiled slot keeps one winning format.
+            tiled = [e for e in group if e[2]]
+            if tiled:
+                for path, size, udim, _, ext in tiled:
+                    plan.actions.append(
+                        FileAction(path, "keep", slot=key, lod=lod, size=size, udim=udim,
+                                   res=token,
+                                   dest="tex/" + matcher.output_filename(
+                                       plan.name, key, ext, udim, lod, token))
+                    )
+                continue
+
+            group.sort(key=lambda e: matcher.format_rank(key, e[4]), reverse=True)
+            path, size, _, _, ext = group[0]
+            plan.actions.append(
+                FileAction(path, "keep", slot=key, lod=lod, size=size, res=token,
+                           dest="tex/" + matcher.output_filename(
+                               plan.name, key, ext, None, lod, token))
+            )
+            where = f" of lod{lod}" if lod else ""
+            at = f" at {res}" if multi else ""
+            for path, size, _, _, ext in group[1:]:
+                plan.actions.append(
+                    FileAction(path, "reject", size=size, lod=lod,
+                               reason=f"duplicate of slot '{key}'{where}{at} "
+                                      f"in a lower-priority format ({ext})")
+                )
 
     # Packed maps are redundant once the unpacked ones are present - decided
     # per level, because LOD2 may ship an ORM while LOD1 ships them unpacked.
@@ -568,6 +677,7 @@ def _plan_texture_set(plan: ImportPlan, files, cfg, matcher: SlotMatcher) -> Non
 
     candidates: dict = {}
     previews: list = []
+    seen_geo: dict = {}
 
     for path in files:
         size = path.stat().st_size
@@ -580,6 +690,33 @@ def _plan_texture_set(plan: ImportPlan, files, cfg, matcher: SlotMatcher) -> Non
                            reason="vendor-authored, references the original filenames - regenerated into derived/")
             )
             continue
+        # A texture set is not supposed to contain geometry - that is what
+        # makes something a model - but this planner also runs when the TYPE
+        # was declared by hand, and a hand-declared texture asset holding an
+        # .obj should still put it in geo/ rather than burying it in extra/.
+        # Same routing rule as the generic planner, so the two cannot disagree
+        # about what a mesh is.
+        if ext in cfg.geometry_ext:
+            stem_no_lod, lod = split_lod(path.stem, cfg)
+            _, variant = split_variant(stem_no_lod, cfg)
+            if (ext, lod, variant) in seen_geo:
+                where = f" for lod{lod}" if lod else ""
+                which = f" of variant {variant}" if variant else ""
+                plan.actions.append(
+                    FileAction(path, "reject", size=size, lod=lod, variant=variant,
+                               reason=f"second {ext} file{where}{which} - "
+                                      "one file per format per level")
+                )
+                continue
+            seen_geo[(ext, lod, variant)] = path
+            level = f"_lod{lod}" if lod else ""
+            which = f"_{variant}" if variant else ""
+            plan.actions.append(
+                FileAction(path, "keep", dest=f"geo/{plan.name}{which}{level}{ext}",
+                           size=size, lod=lod, variant=variant)
+            )
+            continue
+
         if ext not in IMAGE_EXTS:
             plan.actions.append(bonus_action(plan, path, size))
             continue
@@ -607,11 +744,7 @@ def _plan_texture_set(plan: ImportPlan, files, cfg, matcher: SlotMatcher) -> Non
         plan.warnings.append("no preview image - thumb.jpg will be generated from basecolor")
 
     # --- metadata ----------------------------------------------------------
-    base = next((a for a in plan.kept if a.slot == "diffuse"), None)
-    if base:
-        size = _image_size(base.src)
-        if size:
-            plan.fields["resolution"] = max(size)
+    _record_resolutions(plan)
     plan.fields["slots_present"] = sorted(s for s in kept_slots if s)
     plan.fields["udim"] = any("." in Path(a.dest).stem for a in plan.kept if a.dest and a.slot)
     _record_lods(plan)
@@ -636,7 +769,8 @@ def _plan_generic(plan: ImportPlan, files, cfg, matcher: SlotMatcher, strategy: 
         if _reject_junk(plan, path, size):
             continue
         ext = path.suffix.lower()
-        _, lod = split_lod(path.stem, cfg)
+        stem_no_lod, lod = split_lod(path.stem, cfg)
+        _, variant = split_variant(stem_no_lod, cfg)
 
         # Baked textures (.tex/.tx/.rat) are regenerable by definition - that
         # is what derived/ is for. Kept under their own names because nothing
@@ -648,25 +782,39 @@ def _plan_generic(plan: ImportPlan, files, cfg, matcher: SlotMatcher, strategy: 
             )
             continue
 
-        # An image is normally a texture, never the asset itself - a .png beside
-        # an .fbx is its basecolor. But for a single-file type the asset IS the
-        # image: an HDRI is an equirect, a ZBrush alpha is a .psd. Without this
-        # every HDRI fell through to extra/ as a bonus file, so nothing in
-        # asset.json pointed at it and it never got an icon.
-        if ext in primary and (ext not in IMAGE_EXTS or strategy == "single_file"):
-            if (ext, lod) in seen_primary:
+        # Geometry routes on the EXTENSION, never on the type's primary_ext.
+        # Those answer different questions - what is a mesh, versus what makes
+        # this type detectable - and merging them is what sent every .fbx in a
+        # vegetation asset to extra/, since vegetation is declared by its
+        # SpeedTree formats alone and knows nothing about .fbx.
+        #
+        # An image is otherwise a texture, never the asset itself - a .png
+        # beside an .fbx is its basecolor. But for a single-file type the asset
+        # IS the image: an HDRI is an equirect, a ZBrush alpha is a .psd.
+        # Without that exception every HDRI fell through to extra/, so nothing
+        # in asset.json pointed at it and it never got an icon.
+        is_geo = ext in cfg.geometry_ext
+        if (is_geo or ext in primary) and (ext not in IMAGE_EXTS
+                                           or strategy == "single_file"):
+            # Variant is part of the identity, so Big and Small no longer
+            # fight over one key. Before this the second one lost and a whole
+            # mesh set never imported.
+            if (ext, lod, variant) in seen_primary:
                 where = f" for lod{lod}" if lod else ""
+                which = f" of variant {variant}" if variant else ""
                 plan.actions.append(
-                    FileAction(path, "reject", size=size, lod=lod,
-                               reason=f"second {ext} file{where} - one file per format per level")
+                    FileAction(path, "reject", size=size, lod=lod, variant=variant,
+                               reason=f"second {ext} file{where}{which} - "
+                                      "one file per format per level")
                 )
                 continue
-            seen_primary[(ext, lod)] = path
-            folder = "geo/" if strategy == "mesh_plus_textures" else ""
+            seen_primary[(ext, lod, variant)] = path
+            folder = "geo/" if (is_geo or strategy == "mesh_plus_textures") else ""
             level = f"_lod{lod}" if lod else ""
+            which = f"_{variant}" if variant else ""
             plan.actions.append(
-                FileAction(path, "keep", dest=f"{folder}{plan.name}{level}{ext}",
-                           size=size, lod=lod)
+                FileAction(path, "keep", dest=f"{folder}{plan.name}{which}{level}{ext}",
+                           size=size, lod=lod, variant=variant)
             )
             continue
 
@@ -696,5 +844,8 @@ def _plan_generic(plan: ImportPlan, files, cfg, matcher: SlotMatcher, strategy: 
 
     if kept_slots:
         plan.fields["slots_present"] = sorted(kept_slots)
-    plan.fields["formats"] = sorted({e.lstrip(".") for e, _ in seen_primary})
+    # `e, *_` because the key carries lod and variant too - it has grown twice
+    # and a fixed-width unpack breaks silently at the next dimension.
+    plan.fields["formats"] = sorted({e.lstrip(".") for e, *_ in seen_primary})
+    _record_resolutions(plan)
     _record_lods(plan)

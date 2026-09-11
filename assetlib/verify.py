@@ -10,7 +10,51 @@ from pathlib import Path
 
 from .hashing import UnavailableAlgorithm, matches
 from .model import (ASSET_FILE, SCHEMA_VERSION, UDIM_TOKEN, Asset, expand,
-                    iter_assets, on_disk_version)
+                    iter_assets, on_disk_version, roles)
+
+
+# Files that are allowed to exist without anything in asset.json pointing at
+# them. extra/ is bonus payload kept verbatim and deliberately uninterpreted,
+# derived/ is regenerable and may be rebuilt at any time, preview/ is generated,
+# and _editing/ is a staging folder an interrupted edit can leave behind.
+UNBOUND_DIRS = ("extra/", "derived/", "preview/", "_editing/")
+
+
+def _orphans(asset: Asset, asset_dir: Path, rel) -> list:
+    """Files on disk that nothing in asset.json names.
+
+    The complement of every other check here. They all ask "does this pointer
+    resolve"; none asked "does this file have a pointer", which is why a LOD
+    level overwriting its own geometry stayed invisible - the surviving pointer
+    resolved perfectly and the lost file simply sat there.
+
+    A warning, not an error: an orphan is a binding that was not made, which is
+    a real defect, but nothing is broken or unreadable because of it and the
+    file itself is intact.
+    """
+    table = roles(asset)
+    bound = set(table)
+    for relpath in list(table):
+        # A tiled binding names a set; the tiles are the real files.
+        bound.update(expand(asset, relpath))
+    bound.add(ASSET_FILE)
+
+    out = []
+    for path in sorted(asset_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        # Asset.write() writes a temp file beside asset.json and os.replace()s
+        # it, so one of these exists for a few milliseconds per package during
+        # a migration. Verifying while the window is doing that pass reported
+        # every in-flight write as an orphan - which is how this was found, on
+        # the first run, against a library being migrated in another process.
+        if path.name.startswith(".asset-") and path.suffix == ".tmp":
+            continue
+        inside = path.relative_to(asset_dir).as_posix()
+        if inside in bound or inside.startswith(UNBOUND_DIRS):
+            continue
+        out.append(("warn", str(rel), f"nothing in asset.json points at {inside}"))
+    return out
 
 
 def verify(cfg, deep: bool = False) -> list:
@@ -68,9 +112,15 @@ def verify(cfg, deep: bool = False) -> list:
                              f"asset.json name {asset.name!r} != folder name {folder_name!r}"))
 
         pointers = [(f"slot {slot}", relpath) for slot, relpath in asset.textures.items()]
+        for slot, sizes in (asset.resolutions or {}).items():
+            for label, relpath in (sizes or {}).items():
+                pointers.append((f"slot {slot} {label}", relpath))
         for level, entry in (asset.lods or {}).items():
             if entry.get("geo"):
                 pointers.append((f"lod{level} geo", entry["geo"]))
+            for rep in entry.get("representations") or []:
+                if rep.get("file"):
+                    pointers.append((f"lod{level} {rep.get('role') or 'geo'}", rep["file"]))
             for slot, relpath in (entry.get("textures") or {}).items():
                 pointers.append((f"lod{level} slot {slot}", relpath))
 
@@ -93,6 +143,8 @@ def verify(cfg, deep: bool = False) -> list:
                                                   if len(missing) > 3 else "")
                 problems.append(("error", str(rel),
                                  f"{label} points at missing file(s): {shown}"))
+
+        problems.extend(_orphans(asset, asset_dir, rel))
 
         if deep:
             for relpath, expected in asset.hashes.items():

@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS assets (
     path        TEXT NOT NULL,
     size        INTEGER DEFAULT 0,
     resolution  INTEGER,
+    resolutions TEXT DEFAULT '',
     tags        TEXT DEFAULT '',
     created     TEXT
 );
@@ -40,7 +41,29 @@ def connect(cfg) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
+    # CREATE TABLE IF NOT EXISTS never alters a table that already exists, so a
+    # database written before `resolutions` simply lacks the column and every
+    # query mentioning it fails. The index is a cache and F5 rebuilds it, but a
+    # missing column would break the window before anyone could press F5.
+    have = {row[1] for row in conn.execute("PRAGMA table_info(assets)")}
+    if "resolutions" not in have:
+        conn.execute("ALTER TABLE assets ADD COLUMN resolutions TEXT DEFAULT ''")
     return conn
+
+
+def _res_blob(asset) -> str:
+    """' 16k 8k 4k 2k ' - every size the asset holds, padded for exact LIKE.
+
+    A list in a column is normally the wrong shape, and a resolutions table
+    would be the right one. It is not worth it here: the whole database is a
+    cache rebuilt from asset.json by F5, nothing joins on a resolution, and the
+    only question ever asked of it is whether one label is present.
+    """
+    labels = asset.fields.get("resolutions") or []
+    if not labels and asset.fields.get("resolution"):
+        from .model import res_label
+        labels = [res_label(asset.fields["resolution"])]
+    return (" " + " ".join(str(x) for x in labels) + " ") if labels else ""
 
 
 def _dir_size(path: Path) -> int:
@@ -51,13 +74,15 @@ def upsert(conn: sqlite3.Connection, asset: Asset, asset_dir: Path, library_root
     rel = str(asset_dir.relative_to(library_root)).replace("\\", "/")
     tags = " ".join(asset.tags)
     conn.execute(
-        "INSERT INTO assets (uuid,name,type,category,path,size,resolution,tags,created) "
-        "VALUES (?,?,?,?,?,?,?,?,?) "
+        "INSERT INTO assets (uuid,name,type,category,path,size,resolution,resolutions,tags,created) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(uuid) DO UPDATE SET name=excluded.name, type=excluded.type, "
         "category=excluded.category, path=excluded.path, size=excluded.size, "
-        "resolution=excluded.resolution, tags=excluded.tags",
+        "resolution=excluded.resolution, resolutions=excluded.resolutions, "
+        "tags=excluded.tags",
         (asset.uuid, asset.name, asset.type, asset.category, rel,
-         _dir_size(asset_dir), asset.fields.get("resolution"), tags, asset.created),
+         _dir_size(asset_dir), asset.fields.get("resolution"),
+         _res_blob(asset), tags, asset.created),
     )
     conn.execute("DELETE FROM assets_fts WHERE uuid = ?", (asset.uuid,))
     conn.execute(
@@ -121,7 +146,11 @@ def search(conn: sqlite3.Connection, text: str = "", limit: int = 5000) -> list:
         elif key == "cat":
             where.append("a.category = ?"); params.append(value)
         elif key == "res":
-            where.append("CAST(a.resolution AS TEXT) LIKE ?"); params.append(value.rstrip("k") + "%")
+            # "has this resolution", not "is this resolution": an asset holding
+            # 2k/4k/8k/16k answers res:4k as readily as res:16k. The blob is
+            # space-delimited on both sides so '4k' cannot match '4096' or
+            # '14k'.
+            where.append("a.resolutions LIKE ?"); params.append(f"% {value.strip().lower()} %")
         else:  # tag / src -> tag namespace
             token = value if key == "tag" else f"{key}:{value}"
             where.append("a.tags LIKE ?"); params.append(f"%{token}%")

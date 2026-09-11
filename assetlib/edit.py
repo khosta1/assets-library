@@ -21,7 +21,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .analyse import ImportPlan, icon_source
-from .commit import _copy_and_hash, _promote_hero_lod, bind, fallback_icon
+from .commit import (_copy_and_hash, _promote_best_resolution, _promote_hero_lod,
+                     _promote_lod_geo, bind, fallback_icon)
 from .hashing import file_hash
 from .model import ASSET_FILE, Asset
 from .naming import unique_name
@@ -251,7 +252,7 @@ def apply(eplan: EditPlan, cfg, progress=None) -> Path:
     asset.fields = dict(plan.fields)
     # Rebuilt from scratch: a stale pointer to a file that no longer exists is
     # exactly the drift verify would flag.
-    asset.textures, asset.representations = {}, []
+    asset.textures, asset.representations, asset.resolutions = {}, [], {}
     asset.lods, asset.hashes, asset.udim = {}, {}, {}
 
     by_old = {c.old_rel: c for c in eplan.changes if c.old_rel}
@@ -288,8 +289,11 @@ def apply(eplan: EditPlan, cfg, progress=None) -> Path:
         else:
             asset.hashes[action.dest] = _copy_and_hash(action.src, target)
         placed[action.src.resolve()] = target
-        bind(asset, action.dest, action.slot, action.lod, action.udim)
+        bind(asset, action.dest, action.slot, action.lod, action.udim,
+             action.res, action.variant)
 
+    _promote_lod_geo(asset)
+    _promote_best_resolution(asset)
     _promote_hero_lod(asset)
     asset.fields.setdefault(
         "normal_convention", "opengl" if "normal" in asset.textures else None)

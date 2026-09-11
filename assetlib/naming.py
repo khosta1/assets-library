@@ -51,6 +51,35 @@ def split_lod(stem: str, cfg) -> tuple:
     return cleaned, int(found.group(1))
 
 
+def split_variant(stem: str, cfg) -> tuple:
+    """'dactylisglomerata_hznoe_big' -> ('dactylisglomerata_hznoe', 'big').
+
+    A variant is a SECOND version of the same asset that has to be KEPT, which
+    is the opposite of the texture `variants` in texture_slots.json - those name
+    a thing the library deliberately stores only one of. Megascans ships a Big
+    and a Small mesh of one plant, sharing one texture set; before this the
+    second lost the (ext, lod) contest and never imported at all.
+
+    Stripped from the stem for the same reason LOD is: two variants are one
+    asset, so both must resolve to one name. Returns (stem, None) when nothing
+    matches.
+
+    The result is a PRE-FILL, never a decision. The Var column in the Add window
+    is what settles it, because a token that looks like a variant but is part of
+    the real name is the mistake a person catches at a glance and a pattern
+    never will.
+    """
+    patterns = cfg.naming.get("variant_patterns") or []
+    for pattern in patterns:
+        found = re.search(rf"(?:^|_)({pattern})(?=_|$)", stem, re.I)
+        if not found:
+            continue
+        cleaned = f"{stem[:found.start()]}_{stem[found.end():]}"
+        cleaned = _REPEATS.sub("_", cleaned).strip("_")
+        return cleaned, found.group(1).lower()
+    return stem, None
+
+
 def unique_name(base: str, parent: Path) -> str:
     """Append _02, _03 ... until the name is free inside `parent`."""
     if not (parent / base).exists():
