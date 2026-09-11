@@ -1,0 +1,16 @@
+AI base workflow tools
+baseline: H:\Code\AI_base_workflow
+version:  1  (2026-09-11)
+
+Copied into this project, not shared: a clone of this project is complete on
+its own, and these scripts may be edited for this project.
+
+The cost of that choice is drift. `update-tools.bat` re-copies from the
+baseline when you ask, listing what it would overwrite first, so local edits
+are visible before they are lost.
+
+If you edit a script here, say so under CHANGED below, or the next update will
+quietly take it back.
+
+CHANGED HERE
+  (nothing yet)

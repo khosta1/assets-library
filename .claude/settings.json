@@ -1,0 +1,57 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git rev-list:*)",
+      "Bash(python tools/pack.py:*)",
+      "Bash(python tools/codemap.py:*)",
+      "Bash(python tools/stale.py:*)",
+      "Bash(python tools/recall.py:*)",
+      "Bash(python tools/shot.py:*)",
+      "Bash(python tools/budget.py:*)",
+      "Bash(scc:*)",
+      "Bash(ctags:*)",
+      "PowerShell(git status:*)",
+      "PowerShell(git log:*)",
+      "PowerShell(git diff:*)",
+      "PowerShell(python tools/*)",
+      "PowerShell(scc:*)"
+    ],
+    "deny": []
+  },
+
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          { "type": "command", "command": "git log --oneline -5" },
+          { "type": "command", "command": "git status --short" },
+          { "type": "command", "command": "powershell -NoProfile -Command \"if (Test-Path docs/journal.md) { Get-Content docs/journal.md -TotalCount 40 }\"" },
+          { "type": "command", "command": "powershell -NoProfile -Command \"if (Test-Path ROADMAP.md) { Select-String -Path ROADMAP.md -Pattern '^## Open bugs' -Context 0,12 }\"" },
+          { "type": "command", "command": "python tools/stale.py" }
+        ]
+      }
+    ],
+
+    "PreCompact": [
+      {
+        "hooks": [
+          { "type": "command", "command": "powershell -NoProfile -Command \"Write-Output 'PRE-COMPACT: run /handoff now. What is half-done and why is about to be summarised away; the journal is the only place it survives.'\"" }
+        ]
+      }
+    ],
+
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "powershell -NoProfile -Command \"$c = git status --short; if (($c -match '^.. src/') -and -not ($c -match 'docs/')) { Write-Output 'Code changed this session, no doc did. Check the table in BOOTSTRAP.md: decision -> decisions.md, hour lost -> gotchas.md, switch flipped -> features.md, code removed -> History/.' }\"" }
+        ]
+      }
+    ]
+  }
+}

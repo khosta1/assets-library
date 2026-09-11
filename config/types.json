@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "_note": "Asset type registry. The scanner tries types IN ORDER, so specific types must come before generic ones ('model' and 'setup' are near-last). Adding a new kind of asset = adding an entry here, not writing code.",
+
+  "ingest_strategies": {
+    "mesh_plus_textures": "One or more mesh files + a set of images. Textures are slot-matched (see texture_slots.json) and recorded in asset.json.",
+    "texture_set": "Images only, sharing a filename stem. UDIM tiles collapse into one entry.",
+    "single_file": "One self-contained file, optionally with a sidecar preview.",
+    "sequence": "Numbered frames (.vdb/.bgeo/.exr/.abc). Stored as one asset with a frame range.",
+    "folder_blob": "Fallback. Keeps the folder exactly as found, wraps it with metadata + thumbnail. Guarantees nothing is un-ingestable."
+  },
+
+  "preview_strategies": {
+    "render_mesh": "Offscreen turntable/still via usdrecord or Storm.",
+    "image_first": "Use the highest-priority image found (basecolor > any).",
+    "tonemap": "HDR/EXR tonemapped down to a jpg.",
+    "sequence_mid": "Render the middle frame of the range.",
+    "passthrough": "The asset IS an image; just resize it.",
+    "sidecar": "Use a preview file the DCC already wrote next to the asset.",
+    "icon": "No preview possible; use the type icon."
+  },
+
+  "types": [
+    {
+      "id": "texture",
+      "label": "Texture set",
+      "folder": "texture",
+      "ingest": "texture_set",
+      "preview": "image_first",
+      "primary_ext": [".png", ".jpg", ".jpeg", ".tif", ".tiff", ".tga", ".exr", ".bmp", ".webp", ".psd"],
+      "derived_ext": [".tx", ".rat"],
+      "fields": {
+        "resolution": "int",
+        "udim": "bool",
+        "tileable": "bool",
+        "slots_present": "list[str]",
+        "colorspace": "str"
+      },
+      "notes": "First-class asset, NOT just a dependency of a model. Detected when images share a stem and 2+ distinct slots match."
+    },
+    {
+      "id": "hdri",
+      "label": "HDRI",
+      "folder": "hdri",
+      "ingest": "single_file",
+      "preview": "tonemap",
+      "primary_ext": [".hdr", ".exr"],
+      "fields": {
+        "resolution": "int",
+        "time_of_day": "str",
+        "sun_visible": "bool",
+        "ev": "float"
+      },
+      "notes": "Distinguished from 'texture' by extension + 2:1 aspect ratio + no slot keyword in the name."
+    },
+    {
+      "id": "material",
+      "label": "Material",
+      "folder": "material",
+      "ingest": "single_file",
+      "preview": "sidecar",
+      "primary_ext": [".sbsar", ".sbs", ".spsm", ".mtlx", ".mat"],
+      "companion_ext": [".png", ".jpg"],
+      "fields": {
+        "engine": "str",
+        "parametric": "bool"
+      },
+      "notes": "Substance Designer/Painter, MaterialX, renderer presets. engine = substance|mtlx|karma|octane|redshift|arnold."
+    },
+    {
+      "id": "hda",
+      "label": "Houdini asset",
+      "folder": "hda",
+      "ingest": "single_file",
+      "preview": "sidecar",
+      "primary_ext": [".hda", ".otl", ".hdanc", ".hdalc"],
+      "fields": {
+        "context": "str",
+        "houdini_version": "str",
+        "namespace": "str"
+      },
+      "notes": "context = sop|lop|obj|dop|top. Version matters: an H22 HDA will not open in H20.5, so it must be a searchable field."
+    },
+    {
+      "id": "vdb",
+      "label": "Volume / sim cache",
+      "folder": "vdb",
+      "ingest": "sequence",
+      "preview": "sequence_mid",
+      "primary_ext": [".vdb", ".bgeo", ".bgeo.sc"],
+      "fields": {
+        "frame_range": "int2",
+        "grids": "list[str]",
+        "voxel_size": "float",
+        "size_gb": "float"
+      },
+      "notes": "Embergen exports and Houdini sims. These are HUGE - the UI must show size prominently and migration must never move them without an explicit confirm."
+    },
+    {
+      "id": "cache",
+      "label": "Geometry cache",
+      "folder": "cache",
+      "ingest": "sequence",
+      "preview": "sequence_mid",
+      "primary_ext": [".abc", ".usd", ".usdc", ".bgeo", ".bgeo.sc"],
+      "fields": {
+        "frame_range": "int2",
+        "fps": "float",
+        "deforming": "bool"
+      },
+      "notes": "Animated/deforming geo. Only used when a frame range is detected - a single static .abc is a 'model'."
+    },
+    {
+      "id": "scan",
+      "label": "Photogrammetry / scan",
+      "folder": "scan",
+      "ingest": "mesh_plus_textures",
+      "preview": "render_mesh",
+      "primary_ext": [".obj", ".ply", ".fbx", ".abc", ".usd", ".usdz"],
+      "companion_ext": [".txt", ".xmp", ".rcproj", ".json"],
+      "fields": {
+        "source_photos": "int",
+        "capture_date": "str",
+        "capture_location": "str",
+        "is_splat": "bool",
+        "cleaned": "bool"
+      },
+      "notes": "RealityCapture output and 3DGS/Lichtfeld splats (.ply). is_splat separates gaussian splats from meshes. Ties into the existing Point_clean_tool workflow."
+    },
+    {
+      "id": "vegetation",
+      "label": "Vegetation / SpeedTree",
+      "folder": "vegetation",
+      "ingest": "mesh_plus_textures",
+      "preview": "render_mesh",
+      "primary_ext": [".spm", ".st", ".st9", ".srt"],
+      "companion_ext": [".fbx", ".obj", ".abc", ".png", ".tga"],
+      "fields": {
+        "species": "str",
+        "lod_count": "int",
+        "season": "str",
+        "height_m": "float"
+      },
+      "notes": "SpeedTree source + its baked exports, kept as one asset. Feeds the existing Speedtree_importer tool."
+    },
+    {
+      "id": "terrain",
+      "label": "Terrain",
+      "folder": "terrain",
+      "ingest": "folder_blob",
+      "preview": "image_first",
+      "primary_ext": [".terrain", ".tor", ".r16", ".raw"],
+      "companion_ext": [".exr", ".png", ".tif", ".obj"],
+      "fields": {
+        "resolution": "int",
+        "real_world_size_km": "float",
+        "bit_depth": "int"
+      },
+      "notes": "GAEA projects + exported heightfields/masks. VERIFY: .tor = Gaea 2.x, .terrain = Gaea 1.x on your install."
+    },
+    {
+      "id": "garment",
+      "label": "Garment",
+      "folder": "garment",
+      "ingest": "folder_blob",
+      "preview": "sidecar",
+      "primary_ext": [".zprj", ".zpac"],
+      "companion_ext": [".Zfab", ".avt", ".obj", ".fbx", ".abc", ".png"],
+      "fields": {
+        "avatar": "str",
+        "has_pattern": "bool",
+        "simulated": "bool"
+      },
+      "notes": "Marvelous Designer. folder_blob because a .zprj drags along fabrics/avatars/textures we should not try to understand."
+    },
+    {
+      "id": "brush",
+      "label": "Brush / alpha",
+      "folder": "brush",
+      "ingest": "single_file",
+      "preview": "passthrough",
+      "primary_ext": [".ztl", ".zpr", ".zbp", ".abr", ".psd", ".tif", ".png"],
+      "fields": {
+        "app": "str",
+        "kind": "str"
+      },
+      "notes": "ZBrush tools/alphas, Photoshop brushes, Mari/Substance alphas. app = zbrush|photoshop|mari|substance. kind = alpha|brush|stencil|tool. VERIFY the ZBrush brush extension on your install."
+    },
+    {
+      "id": "lut",
+      "label": "LUT / colour",
+      "folder": "lut",
+      "ingest": "single_file",
+      "preview": "icon",
+      "primary_ext": [".cube", ".3dl", ".csp", ".lut", ".spi1d", ".spi3d"],
+      "fields": {
+        "input_colorspace": "str",
+        "output_colorspace": "str",
+        "size": "int"
+      },
+      "notes": "DaVinci / Nuke / OCIO. Small and simple - the best first type to test the whole pipeline end to end."
+    },
+    {
+      "id": "ies",
+      "label": "IES light profile",
+      "folder": "ies",
+      "ingest": "single_file",
+      "preview": "icon",
+      "primary_ext": [".ies"],
+      "fields": {
+        "lumens": "float",
+        "beam_angle": "float",
+        "manufacturer": "str"
+      },
+      "notes": "Photometric light profiles. Found as H:/3D/Maya/assets/IES. Preview could later be a rendered light cone, but 'icon' is fine to start."
+    },
+    {
+      "id": "reference",
+      "label": "Reference",
+      "folder": "reference",
+      "ingest": "folder_blob",
+      "preview": "image_first",
+      "primary_ext": [".jpg", ".jpeg", ".png", ".tif", ".pdf", ".mp4", ".mov", ".webp"],
+      "fields": {
+        "subject": "str",
+        "source_url": "str"
+      },
+      "notes": "Photo refs, PureRef boards, breakdown videos, PDFs. Deliberately loose - the value here is tags + search, not structure."
+    },
+    {
+      "id": "model",
+      "label": "Model",
+      "folder": "model",
+      "ingest": "mesh_plus_textures",
+      "preview": "render_mesh",
+      "primary_ext": [".fbx", ".obj", ".abc", ".usd", ".usda", ".usdc", ".usdz", ".blend", ".ma", ".mb", ".stl", ".ply", ".gltf", ".glb", ".3ds", ".dae", ".lwo", ".c4d", ".max"],
+      "companion_ext": [".png", ".jpg", ".jpeg", ".tif", ".tiff", ".tga", ".exr", ".mtl"],
+      "fields": {
+        "tris": "int",
+        "bounds_m": "float3",
+        "uv_sets": "int",
+        "has_rig": "bool",
+        "real_world_scale": "bool",
+        "up_axis": "str"
+      },
+      "notes": "The generic mesh type. Comes LAST of the mesh types so scan/vegetation get first refusal."
+    },
+    {
+      "id": "setup",
+      "label": "Scene / setup",
+      "folder": "setup",
+      "ingest": "folder_blob",
+      "preview": "sidecar",
+      "primary_ext": [".hip", ".hipnc", ".hiplc", ".ma", ".mb", ".blend", ".nk", ".spp", ".mra", ".drp"],
+      "fields": {
+        "app": "str",
+        "app_version": "str",
+        "purpose": "str"
+      },
+      "notes": "Not an asset you import - a setup you reopen. Lighting rigs, comp templates, shader tests, lookdev scenes."
+    },
+    {
+      "id": "unknown",
+      "label": "Unsorted",
+      "folder": "_unsorted",
+      "ingest": "folder_blob",
+      "preview": "image_first",
+      "primary_ext": [],
+      "fields": {},
+      "notes": "Terminal fallback. Nothing is ever rejected by the scanner - it lands here with a name, a thumbnail and tags, and can be retyped later from the UI."
+    }
+  ]
+}

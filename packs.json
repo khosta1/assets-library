@@ -1,0 +1,63 @@
+{
+  "_note": [
+    "Context packs for tools/pack.py. Keys starting with '_' are comments.",
+    "",
+    "This project is ~5 000 lines, which fits in one window -- so 'all' is",
+    "genuinely usable here, unlike on a large C++ tree. The topic packs still",
+    "earn their place: a session about the import pipeline does not need the",
+    "Qt code, and one about the window does not need the hashing.",
+    "",
+    "A pack must be self-sufficient: the topic's code, what it imports, and",
+    "the docs that argue for it. 'brief' is mandatory and attached first."
+  ],
+
+  "brief": {
+    "description": "The minimum: what the project is, its rules, today's state. Attach this first, always.",
+    "include": [
+      "CLAUDE.md",
+      "docs/architecture.md",
+      "docs/decisions.md",
+      "docs/gotchas.md",
+      "ROADMAP.md"
+    ]
+  },
+
+  "docs": {
+    "description": "All documentation, not one line of code.",
+    "include": ["CLAUDE.md", "docs/**/*.md", "ROADMAP.md"]
+  },
+
+  "ingest": {
+    "description": "The import pipeline: what is guessed, where it lands, what is written.",
+    "include": [
+      "assetlib/analyse.py", "assetlib/commit.py", "assetlib/slots.py",
+      "assetlib/naming.py", "assetlib/model.py", "assetlib/config.py",
+      "config/types.json", "config/texture_slots.json", "config/library.json",
+      "docs/architecture.md", "docs/gotchas.md"
+    ]
+  },
+
+  "storage": {
+    "description": "asset.json, the index, hashing and verification -- the 'disk is truth' half.",
+    "include": [
+      "assetlib/model.py", "assetlib/index.py", "assetlib/hashing.py",
+      "assetlib/verify.py", "assetlib/edit.py", "assetlib/config.py",
+      "config/library.json",
+      "docs/architecture.md", "docs/gotchas.md"
+    ]
+  },
+
+  "ui": {
+    "description": "The windows: browser, Add, Edit, Contents, and the threading rules around them.",
+    "include": [
+      "ui/**", "assetlib/model.py", "assetlib/index.py", "assetlib/analyse.py",
+      "assetlib/thumbnail.py",
+      "docs/architecture.md", "docs/gotchas.md"
+    ]
+  },
+
+  "all": {
+    "description": "Everything: assetlib, ui and config. Fits a window on this project.",
+    "include": ["assetlib/**", "ui/**", "config/**"]
+  }
+}

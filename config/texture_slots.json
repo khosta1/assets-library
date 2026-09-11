@@ -1,0 +1,242 @@
+{
+  "schema_version": 1,
+  "_note": "Texture slot matching. ORDER IS SIGNIFICANT: each filename is tested against slots top to bottom and the FIRST match wins, so specific slots come before generic ones and 'diffuse' is the last catch-all. This preserves the behaviour tuned in Assets_manager_var01.py (_TEX_SLOTS) and extends it. This table is the binding between files and shader inputs - asset.json records the resolved mapping, so FBX-internal texture paths are never trusted.",
+
+  "matching": {
+    "case_sensitive": false,
+    "separators": ["_", "-", ".", " "],
+    "udim_patterns": [
+      "\\.(\\d{4})(?=[._]|$)",
+      "_(\\d{4})(?=[._]|$)",
+      "_u(\\d+)_v(\\d+)(?=[._]|$)"
+    ],
+    "udim_range": [1001, 1999],
+    "_udim_patterns": "Matched against the stem with its delimiter restored, so the Mari convention 'name.1001.ext' is found. A pattern with TWO groups is the u/v form and the tile is computed as 1001 + (u-1) + (v-1)*10.",
+    "_udim_range": "A four-digit number is only a UDIM tile inside this range. Without it 'brick_2048.png' and 'tex_8192.exr' read as tiles - resolution in a filename is far more common than a tile above 1999.",
+    "strip_before_match": ["(_|\\.)\\d{4}(_|\\.)", "_v\\d+$", "_\\d+k$"],
+    "min_slots_for_texture_set": 2,
+    "_min_slots": "A group of images is only promoted to a 'texture' asset when at least this many DISTINCT slots match. One lonely jpg is a 'reference', not a texture set."
+  },
+
+  "slots": [
+    {
+      "key": "translucency",
+      "keywords": ["translucen", "subsurface", "_sss_", "_sss", "sss_", "transmission"],
+      "mtlx_input": "transmission_color",
+      "dtype": "color3",
+      "colorspace": "srgb_texture",
+      "post_node": null
+    },
+    {
+      "key": "thickness",
+      "keywords": ["thickness", "_thick_", "_thick"],
+      "mtlx_input": "subsurface_radius",
+      "dtype": "float",
+      "colorspace": "none",
+      "post_node": null
+    },
+    {
+      "key": "emissive",
+      "keywords": ["emissive", "emission", "emit", "_glow_", "glow"],
+      "mtlx_input": "emission_color",
+      "dtype": "color3",
+      "colorspace": "srgb_texture",
+      "post_node": null
+    },
+    {
+      "key": "normal",
+      "keywords": ["_normal_", "normalmap", "normal", "_nrm_", "_nor_", "_nor", "nrm", "_n_"],
+      "mtlx_input": "normal",
+      "dtype": "vector3",
+      "colorspace": "none",
+      "post_node": "normalmap",
+      "variants": {
+        "opengl": ["_gl", "_gl_", "opengl", "_ogl", "normalgl", "nor_gl"],
+        "directx": ["_dx", "_dx_", "directx", "normaldx", "nor_dx"]
+      },
+      "keep": "opengl",
+      "generate_on_demand": ["directx"],
+      "_variants": "Green-channel convention. Detected from the filename when present, otherwise recorded as unknown and flagged in the UI - flipping it wrong is a classic silent bug.",
+      "_keep": "Only the OpenGL normal is stored. DirectX is an exact green-channel inversion, so it is regenerated into derived/ on demand rather than stored. Saves ~150MB per ambientCG asset. If ONLY a DX map is supplied, it is converted to GL at import so the library stays uniform."
+    },
+    {
+      "key": "bump",
+      "keywords": ["_bump_", "_bump", "bumpmap"],
+      "mtlx_input": null,
+      "dtype": "float",
+      "colorspace": "none",
+      "post_node": "bump"
+    },
+    {
+      "key": "roughness",
+      "keywords": ["roughness", "_rough_", "rough", "_rgh_", "_rgh", "_r_"],
+      "mtlx_input": "specular_roughness",
+      "dtype": "float",
+      "colorspace": "none",
+      "post_node": null
+    },
+    {
+      "key": "gloss",
+      "keywords": ["glossiness", "_gloss_", "gloss"],
+      "mtlx_input": "specular_roughness",
+      "dtype": "float",
+      "colorspace": "none",
+      "post_node": "invert",
+      "_note": "Legacy gloss maps are inverted roughness. post_node handles it so old libraries import correctly."
+    },
+    {
+      "key": "metallic",
+      "keywords": ["metallic", "metalness", "_metal_", "metal", "_mtl_", "_m_"],
+      "mtlx_input": "metalness",
+      "dtype": "float",
+      "colorspace": "none",
+      "post_node": null
+    },
+    {
+      "key": "specular",
+      "keywords": ["specular", "_spec_", "spec_", "_spec", "reflect"],
+      "mtlx_input": "specular_color",
+      "dtype": "color3",
+      "colorspace": "srgb_texture",
+      "post_node": null
+    },
+    {
+      "key": "coat",
+      "keywords": ["clearcoat", "_coat_", "_coat"],
+      "mtlx_input": "coat",
+      "dtype": "float",
+      "colorspace": "none",
+      "post_node": null
+    },
+    {
+      "key": "sheen",
+      "keywords": ["sheen", "fuzz"],
+      "mtlx_input": "sheen_color",
+      "dtype": "color3",
+      "colorspace": "srgb_texture",
+      "post_node": null
+    },
+    {
+      "key": "ao",
+      "keywords": ["_ao_", "_ao", "occlusion", "ambient_oc", "ambientoc"],
+      "mtlx_input": null,
+      "dtype": "float",
+      "colorspace": "none",
+      "post_node": null
+    },
+    {
+      "key": "cavity",
+      "keywords": ["cavity", "_cav_"],
+      "mtlx_input": null,
+      "dtype": "float",
+      "colorspace": "none",
+      "post_node": null
+    },
+    {
+      "key": "curvature",
+      "keywords": ["curvature", "_curv_"],
+      "mtlx_input": null,
+      "dtype": "float",
+      "colorspace": "none",
+      "post_node": null
+    },
+    {
+      "key": "disp",
+      "keywords": ["displacement", "_disp_", "_disp", "height", "_height_", "_dp_", "_h_"],
+      "mtlx_input": null,
+      "dtype": "float",
+      "colorspace": "none",
+      "post_node": "displacement"
+    },
+    {
+      "key": "opacity",
+      "keywords": ["opacity", "_opa", "_alpha_", "alpha", "_mask_", "mask", "transparen"],
+      "mtlx_input": "opacity",
+      "dtype": "float",
+      "colorspace": "none",
+      "post_node": null
+    },
+    {
+      "key": "id",
+      "keywords": ["_id_", "matid", "material_id", "objectid"],
+      "mtlx_input": null,
+      "dtype": "color3",
+      "colorspace": "none",
+      "post_node": null
+    },
+    {
+      "key": "position",
+      "keywords": ["position", "_pos_", "worldpos"],
+      "mtlx_input": null,
+      "dtype": "vector3",
+      "colorspace": "none",
+      "post_node": null
+    },
+    {
+      "key": "orm",
+      "keywords": ["_orm", "occlusionroughnessmetallic", "_arm"],
+      "mtlx_input": null,
+      "dtype": "color3",
+      "colorspace": "none",
+      "post_node": "split_orm",
+      "channel_order": { "_orm": ["ao", "roughness", "metallic"], "_arm": ["ao", "roughness", "metallic"] },
+      "_note": "Packed maps (game workflow). Poly Haven ships _arm. split_orm unpacks R/G/B into the three slots on import. If an unpacked map for the same slot also exists, the unpacked one wins and the packed map is kept only as a note."
+    },
+    {
+      "key": "diffuse",
+      "keywords": ["diffuse", "_diff_", "_diff", "albedo", "_alb_", "basecolor", "base_color", "basecol", "_col_", "_color_", "_color", "color_", "_clr_", "color", "_d_", "_bc_"],
+      "mtlx_input": "base_color",
+      "dtype": "color3",
+      "colorspace": "srgb_texture",
+      "post_node": null,
+      "_note": "CATCH-ALL, must stay LAST. Otherwise 'subsurface_color' and 'specular_color' get mis-slotted as diffuse."
+    }
+  ],
+
+  "output_names": {
+    "_note": "On import, every texture is RENAMED to <asset>_<output_name>.<ext>. This is the whole point of an owned hierarchy: ambientCG '_Color' and Poly Haven '_diff_' both land as '_basecolor', so adapters and importers never guess again. Guessing happens ONCE, at import.",
+    "diffuse": "basecolor",
+    "roughness": "roughness",
+    "gloss": "roughness",
+    "metallic": "metallic",
+    "normal": "normal",
+    "bump": "bump",
+    "disp": "displacement",
+    "ao": "ao",
+    "opacity": "opacity",
+    "emissive": "emissive",
+    "specular": "specular",
+    "translucency": "sss",
+    "thickness": "thickness",
+    "coat": "coat",
+    "sheen": "sheen",
+    "cavity": "cavity",
+    "curvature": "curvature",
+    "id": "id",
+    "position": "position",
+    "orm": "orm"
+  },
+
+  "format_priority": {
+    "_note": "When the SAME slot ships in several formats (Poly Haven gives nor_gl as both .exr 133MB and .png 362MB), keep one. Higher index wins. The rejected file is REPORTED, never silently deleted - the user confirms.",
+    "data_slots": [".png", ".tif", ".exr"],
+    "color_slots": [".png", ".tif", ".jpg"],
+    "_data_slots": "normal/roughness/disp/metallic etc - float precision matters, exr preferred.",
+    "_color_slots": "basecolor/emissive/specular - sRGB, jpg acceptable, png preferred."
+  },
+
+  "discard_on_import": {
+    "_note": "Vendor-authored files that reference the ORIGINAL filenames and therefore break the moment we rename. We regenerate our own into derived/, so these are dropped rather than rewritten.",
+    "extensions": [".mtlx", ".usd", ".usda", ".usdc", ".mtl"],
+    "keep_if": "asset type is not 'texture'"
+  },
+
+  "preview_stems": ["thumbnail", "thumb", "preview", "render", "sphere", "screenshot", "asset_100", "asset_50"],
+  "_preview_stems": "Filenames matching these are treated as the asset preview, never as a texture slot. Matched as a SUBSTRING of the stem, so entries must stay specific: 'asset_100'/'asset_50' are RenderMan .rma bundle previews, and a bare 'asset' would swallow every file a vendor happens to name that way.",
+
+  "preview_rules": {
+    "bare_stem_is_preview": true,
+    "_bare_stem_is_preview": "An image whose stem matches the asset base name with NO slot suffix is the vendor preview render. This is how ambientCG ships it: Concrete014.png next to Concrete014_8K-PNG_Color.png. Without this rule it falls through every slot and lands unmatched.",
+    "fallback": "If no preview file exists, generate thumb.jpg from the basecolor slot."
+  }
+}

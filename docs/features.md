@@ -1,0 +1,72 @@
+<!-- covers: assetlib/**, ui/** -->
+
+# Feature inventory
+
+Four states:
+
+```
+LIVE       running now
+DORMANT    built and working, currently switched off - the switch is named
+VESTIGIAL  kept but unread - a value computed that nothing consumes
+REMOVED    deleted, listed so it does not get reinvented
+```
+
+`ROADMAP.md` is what is being BUILT. This file is what EXISTS.
+
+Last brought in line: **2026-09-11**. ~5 050 lines; the library holds 8 assets
+and verifies clean.
+
+---
+
+## LIVE
+
+- **Hand-declared import, with full per-row override** — the Add window
+  (Ctrl+N): drop zones, plan table, every decision overridable from a dropdown.
+  Nothing is written before the Add button.
+- **LODs end to end** — stripped from vendor names, recorded per level,
+  re-emitted as `_lodN`; hero LOD promoted by `commit._promote_hero_lod()`.
+- **Editing** (Ctrl+E) — re-analysis and diff, staged through `_editing/old/`,
+  which is destroyed last.
+- **Deleting** (Shift+Del) — explicit, confirmed, file list shown first.
+- **Contents viewer** (Ctrl+I) — every file labelled by its ROLE.
+- **HDR/EXR thumbnails** — decoded, exposure from a high percentile,
+  subsampled while reading.
+- **Bounded preview cache** — `ui/thumbcache.py`, invalidated on edit.
+- **FTS search** — free text prefix-matched, filters `type: cat: tag: res:
+  src:`, each negatable with `-`.
+- **Verify, and verify deep** — Library ▸ Verify. Deep recomputes digests,
+  algorithm-aware.
+- **Index rebuild** — F5, from the packages themselves.
+- **Bundled runtime** — `runtime\python.exe`, ~330 MB, Python 3.11.9 with
+  PySide6 6.11.2, Pillow 12.3.0, numpy 2.4.6, OpenEXR 3.4.14, xxhash 4.0.1. No
+  install, no pip, no system Python.
+- **Portability** — tested by running the full toolchain from a completely
+  different path. Config roots are relative, `find_config()` walks up from
+  `assetlib/`, index paths are relative to `library/`.
+
+---
+
+## DORMANT
+
+Nothing. Every switch in this project is a user-facing option, not a hidden
+one.
+
+---
+
+## VESTIGIAL
+
+- **`index.find_by_hash()`** — present, returns nothing, called by nothing. It
+  is the stub for dedup, and the hashes it would need are already in every
+  `asset.json`. Kept because the signature is right; see `ROADMAP.md`.
+
+---
+
+## REMOVED — do not reinvent
+
+- **The command line** — `assetlib/cli.py` and `requirements.txt`, deleted
+  2026-08-21. Its real job was forcing the core to stay UI-free, and that is
+  now an import rule instead. Every command it had exists in the window.
+  Detail and the old command → menu mapping: `docs/History/cli-removed.md`.
+- **Vendor `.mtlx` / `.usdc` sidecars** — discarded at import, by design. They
+  reference the original filenames, which the import renames. Ours will be
+  generated into `derived/` instead. See `docs/decisions.md`.

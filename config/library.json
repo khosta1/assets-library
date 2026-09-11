@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "_note": "THE canonical library structure. The tool owns this tree completely: it creates every folder, names every file, and is the only thing allowed to write inside library/. Nothing here adapts to how source assets were organised - source layout is discarded at import. If you hand-edit library/, Library > Verify will report it as drift.",
+
+  "roots": {
+    "library": "library",
+    "inbox": "_inbox",
+    "quarantine": "_quarantine",
+    "state": ".assetlib",
+    "_note": "Paths are relative to the library base (H:/Code/Assets_library). _inbox is the ONLY way in: drop a folder or a zip there and the tool consumes it. _quarantine holds imports that failed validation, so nothing is ever lost or silently dropped."
+  },
+
+  "tree": {
+    "pattern": "library/{type}/{category}/{asset}/",
+    "depth": 3,
+    "fixed": true,
+    "created_by": "tool_only",
+    "_fixed": "Exactly three levels, always. No deeper nesting, no exceptions, no per-type special cases. {type} comes from types.json, {category} from the closed vocabulary in categories.json.",
+    "example": "library/texture/concrete/concrete014/"
+  },
+
+  "package": {
+    "_note": "Every asset folder looks EXACTLY like this, whatever type it is. Sections that do not apply are simply absent - never renamed, never restructured.",
+    "asset.json": "metadata, the source of truth",
+    "tex/": "normalised textures, one file per slot, named <asset>_<slot>.<ext>",
+    "geo/": "meshes, named <asset>.<ext>, one per format",
+    "preview/": "thumb.jpg (512px) and optionally turn.mp4",
+    "derived/": "GENERATED: .tx / .rat / .usda / .mtlx - regenerable, deletable, never backed up",
+    "extra/": "type-specific leftovers we chose to keep but do not interpret (folder_blob payloads land here)"
+  },
+
+  "cache": {
+    "thumbs_px": 256,
+    "thumbs_min_bytes": 2097152,
+    "thumbs_budget_mb": 500,
+    "_note": "Per-FILE previews for the asset viewer, in .assetlib/thumbs/. Distinct from preview/thumb.jpg, which is part of the package and permanent. This one is a cache and is bounded: 256px because a grid tile is never bigger than that, nothing under thumbs_min_bytes because a small image re-decodes in milliseconds and an entry would buy nothing, and a hard budget swept least-recently-used at startup. Deleting .assetlib/ costs a rebuild and nothing else."
+  },
+
+  "naming": {
+    "style": "lower_snake",
+    "charset": "a-z0-9_",
+    "max_length": 64,
+    "collision": "suffix_02",
+    "lod": {
+      "pattern": "[_-]?lod[_-]?(\\d+)",
+      "token": "lod{n}",
+      "_note": "LOD is a second dimension alongside the texture slot: one asset, several levels of detail, each with its own mesh and often its own maps. The token is searched for ANYWHERE in the stem - vendors put it at the end on meshes (mushroom_LOD1.obj) and in the middle on textures (mushroom_LOD1_albedo.tif). It is stripped before the asset is named, so all 25 files of a 4-LOD asset agree on one name.",
+      "_layout": "Flat: <asset>_lod2_basecolor.tif and geo/<asset>_lod2.obj. An asset with no LODs carries no token and is named exactly as before, so nothing already in the library changes."
+    },
+    "_style": "lowercase snake_case, deliberately. Windows is case-insensitive and Linux is not - the moment this library is read from the Rocky box, 'Concrete014' and 'concrete014' become two different assets. Lowercase removes that class of bug permanently.",
+    "normalise": [
+      "lowercase",
+      "spaces and dashes -> underscore",
+      "strip tokens listed in strip_tokens",
+      "collapse repeated underscores",
+      "trim leading/trailing underscores"
+    ],
+    "strip_tokens": ["1k", "2k", "4k", "8k", "16k", "png", "jpg", "jpeg", "exr", "tif", "hires", "lowres", "final", "new", "copy", "v01", "(1)", "(2)"],
+    "_strip_tokens": "Resolution and format belong in metadata as searchable fields, never in the folder name. Two resolutions of the same asset must resolve to the SAME name so they merge into one asset with variants instead of becoming duplicates.",
+    "examples": {
+      "Concrete014_8K-PNG": "concrete014",
+      "concrete_floor_worn_001_8k": "concrete_floor_worn_001",
+      "Rock051_8K-PNG": "rock051",
+      "Poliigon_GrassPatchyGround_4585(2)": "poliigon_grasspatchyground_4585"
+    }
+  },
+
+  "invariants": {
+    "_note": "Checked by Library > Verify. A violation is a bug in the tool, not something to fix by hand.",
+    "no_absolute_paths": "Nothing inside an asset package may reference a path outside itself.",
+    "no_hand_created_folders": "Every folder under library/ was created by the tool and matches the tree pattern.",
+    "closed_vocabulary": "{type} and {category} must exist in types.json / categories.json.",
+    "one_file_per_slot": "A texture asset has at most one file per slot, in the winning format.",
+    "derived_is_disposable": "Deleting derived/ anywhere must never lose information.",
+    "index_is_rebuildable": "Deleting .assetlib/index.db and rescanning must reproduce it exactly."
+  },
+
+  "import_flow": {
+    "_note": "The only path from the outside world into library/. Every step is reversible until COMMIT.",
+    "1_drop": "User puts a folder or zip in _inbox/.",
+    "2_analyse": "Tool unpacks if needed, detects type, slots, resolution, duplicates. Writes nothing to library/.",
+    "3_propose": "UI shows the proposed asset: name, type, category, slot mapping, files kept vs rejected, size before/after.",
+    "4_confirm": "User fixes the name/type/category and approves. Category MUST be picked from the closed list.",
+    "5_commit": "Tool creates library/{type}/{category}/{asset}/, copies + renames files, writes asset.json, generates preview, indexes.",
+    "6_cleanup": "Source stays in _inbox until the user explicitly clears it. Nothing is auto-deleted, ever."
+  },
+
+  "duplicate_policy": {
+    "detect": "xxh3 content hash, computed at analyse time",
+    "identical_content": "report as duplicate of the existing asset, do not import",
+    "same_name_different_content": "import as a variant, or rename - user decides at step 4",
+    "archive_next_to_extracted": "report the .zip as redundant and offer deletion, never delete automatically",
+    "_archive_note": "Very common in this library: Concrete014_8K-PNG.zip sits next to its extracted folder, 921MB each. Reclaiming those is a meaningful chunk of the 208GB free on H:."
+  }
+}

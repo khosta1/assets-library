@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "_note": "ONE folder level per type. This is the only taxonomy baked into the filesystem - everything else is tags. Because the category also lives in asset.json, changing this list later is a reorg command, not a weekend of dragging folders. Keep each list short: if you hesitate between two, it should be a tag instead.",
+
+  "rules": {
+    "max_depth": 1,
+    "fallback": "misc",
+    "closed_vocabulary": true,
+    "_closed_vocabulary": "The scanner may only assign a category from this list. New categories are added here deliberately, so the tree cannot sprawl on its own."
+  },
+
+  "categories": {
+    "model": ["nature", "props", "architecture", "vehicle", "character", "creature", "furniture", "industrial", "food", "misc"],
+    "texture": ["cloth", "concrete", "dirt", "grass", "rock", "snow", "damage", "decal", "floor", "foliage", "imperfection", "metal", "plaster", "wood", "props", "misc"],
+    "_texture_note": "Seeded from the existing folder names in H:/3D/Maya/assets/texture, lightly singularised. Migration maps old folder -> category 1:1, so nothing has to be re-sorted by hand.",
+    "hdri": ["outdoor", "indoor", "studio", "sky", "night", "misc"],
+    "material": ["substance", "mtlx", "renderer", "misc"],
+    "hda": ["sop", "lop", "obj", "dop", "top", "misc"],
+    "vdb": ["fire", "smoke", "explosion", "cloud", "liquid", "misc"],
+    "cache": ["character", "creature", "fx", "camera", "misc"],
+    "scan": ["rock", "plant", "object", "surface", "person", "environment", "misc"],
+    "vegetation": ["tree", "shrub", "grass", "flower", "moss", "misc"],
+    "terrain": ["mountain", "desert", "canyon", "island", "plain", "misc"],
+    "garment": ["top", "bottom", "dress", "outerwear", "shoes", "accessory", "misc"],
+    "brush": ["alpha", "stencil", "sculpt", "texture", "misc"],
+    "lut": ["show", "camera", "creative", "technical", "misc"],
+    "ies": ["spot", "flood", "street", "architectural", "misc"],
+    "reference": ["photo", "board", "video", "document", "misc"],
+    "setup": ["lighting", "lookdev", "comp", "render", "fx", "template", "misc"],
+    "unknown": ["misc"]
+  },
+
+  "suggested_tag_namespaces": {
+    "_note": "Tags are free-form, but namespaced prefixes keep them searchable instead of turning into soup. The UI should offer these as autocomplete groups.",
+    "src:": ["src:megascans", "src:speedtree", "src:polyhaven", "src:esma", "src:own", "src:purchased"],
+    "res:": ["res:1k", "res:2k", "res:4k", "res:8k"],
+    "proj:": ["proj:esma_s3", "proj:portfolio", "proj:perso"],
+    "state:": ["state:wip", "state:final", "state:broken", "state:duplicate"],
+    "look:": ["look:mossy", "look:wet", "look:snow", "look:burnt", "look:rusty"]
+  }
+}
