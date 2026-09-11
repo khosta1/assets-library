@@ -33,7 +33,7 @@
           { "type": "command", "command": "git status --short" },
           { "type": "command", "command": "powershell -NoProfile -Command \"if (Test-Path docs/journal.md) { Get-Content docs/journal.md -TotalCount 40 }\"" },
           { "type": "command", "command": "powershell -NoProfile -Command \"if (Test-Path ROADMAP.md) { Select-String -Path ROADMAP.md -Pattern '^## Open bugs' -Context 0,12 }\"" },
-          { "type": "command", "command": "python tools/stale.py" }
+          { "type": "command", "command": "powershell -NoProfile -Command \"python tools/stale.py; exit 0\"" }
         ]
       }
     ],
@@ -49,7 +49,7 @@
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "powershell -NoProfile -Command \"$c = git status --short; if (($c -match '^.. src/') -and -not ($c -match 'docs/')) { Write-Output 'Code changed this session, no doc did. Check the table in BOOTSTRAP.md: decision -> decisions.md, hour lost -> gotchas.md, switch flipped -> features.md, code removed -> History/.' }\"" }
+          { "type": "command", "command": "powershell -NoProfile -Command \"$c = git status --short; $d = $c -match '^.. (docs/|ROADMAP\\.md|CLAUDE\\.md)'; $o = $c -notmatch '^.. (docs/|ROADMAP\\.md|CLAUDE\\.md)'; if ($o -and -not $d) { Write-Output 'Code changed this session, no doc did. Check the table in .claude/skills/doc-ritual/SKILL.md: decision -> decisions.md, hour lost -> gotchas.md, switch flipped -> features.md, code removed -> History/.' }\"" }
         ]
       }
     ]

@@ -50,8 +50,14 @@ def last_commit_time(pathspecs):
 
 
 def commits_since(ts, pathspecs):
-    """How many commits touched these pathspecs after ts."""
-    out = git("rev-list", "--count", "--since=@%d" % ts, "HEAD", "--", *pathspecs)
+    """How many commits touched these pathspecs STRICTLY after ts.
+
+    --since is inclusive, so passing the doc's own timestamp counts the commit
+    that created the doc: on a fresh repo every doc committed alongside its
+    subject reports drift against itself. +1 second is the whole fix -- git
+    timestamps are second-resolution, so nothing else can fall in the gap.
+    """
+    out = git("rev-list", "--count", "--since=@%d" % (ts + 1), "HEAD", "--", *pathspecs)
     return int(out) if out.isdigit() else 0
 
 

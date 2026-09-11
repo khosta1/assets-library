@@ -73,7 +73,20 @@ are more risk.
 
 ## Open bugs
 
-- (none recorded)
+*Scaffold, not the app. The app was not touched on 2026-09-11.*
+
+- **Seven of nine docs are watched by nothing.** Only `architecture.md` and
+  `features.md` carry a `<!-- covers: -->` line, so `stale.py` skips the rest
+  without saying so — and the "no coverage declared" list only prints under
+  `--all` (`tools/stale.py:119`). At minimum `gotchas.md` should cover
+  `assetlib/analyse.py, assetlib/slots.py` and `CLAUDE.md` should cover
+  `assetlib/**, ui/**`. Printing the undeclared list by default is the other
+  half: a doc nothing watches is the exact failure the tool exists to catch.
+- **Every `tools\*.bat` ends in `pause`.** Correct for a double-click, dead
+  line for every scripted run. `if "%CI%"=="" pause`, or a `--no-pause` flag.
+
+Four scaffold bugs found the same day were fixed in both trees — see
+`docs/journal.md`, 2026-09-11.
 
 ---
 

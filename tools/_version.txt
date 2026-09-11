@@ -1,6 +1,11 @@
 AI base workflow tools
 baseline: H:\Code\AI_base_workflow
-version:  1  (2026-09-11)
+version:  2  (2026-09-11)
+
+v2  stale.py: `--since` is inclusive, so a doc committed in the same commit as
+    its subject counted that commit as drift. Every project reported false
+    drift on its first commit, which is the first time anyone runs the tool.
+    Fixed with ts + 1.
 
 Copied into this project, not shared: a clone of this project is complete on
 its own, and these scripts may be edited for this project.

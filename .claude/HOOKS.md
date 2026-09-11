@@ -23,8 +23,14 @@ new session would otherwise ask you:
 | `python tools/stale.py` | which docs can no longer be trusted |
 
 Everything is guarded with `Test-Path`, so a project missing `journal.md` or
-`ROADMAP.md` prints nothing rather than an error. `stale.py` exits 1 on drift;
-that is a report, not a failure.
+`ROADMAP.md` prints nothing rather than an error.
+
+`stale.py` exits 1 on drift — a report, not a failure. But the harness treats a
+non-zero hook as failed and **drops its stdout**, so the drift report vanished
+at exactly the moment it had something to say. Found 2026-09-11: `stale.bat`
+reported two drifted docs while the session that had just started showed
+nothing. It is wrapped in `powershell -Command "python tools/stale.py; exit 0"`
+so the text survives its own verdict.
 
 If this ever gets slow or noisy, cut a line rather than the whole hook. The
 orientation is worth more than any single item in it.
@@ -49,15 +55,23 @@ yourself at the first sign of a long session, not to make the hook cleverer.
 
 ## Stop — catching drift at the only moment it is cheap
 
-When the session ends: if the working tree has changes under `src/` and none
-under `docs/`, say so, and name where the missing note would go.
+When the session ends: if the working tree has changes **outside** `docs/`,
+`ROADMAP.md` and `CLAUDE.md`, and none inside them, say so, and name where the
+missing note would go.
 
 It is a prompt, not a gate. Plenty of sessions legitimately change code and no
 document — a typo fix, a rename, a build tweak. The message costs a line and
 the omission it catches costs an afternoon three weeks later.
 
-`^.. src/` matches the status short-format's two status columns, so a file
-merely *named* `src` somewhere in a path does not trigger it.
+It used to test `^.. src/`. That is the template's layout, not every project's
+— this one keeps its code in `assetlib/` and `ui/` and has no `src/` at all, so
+the hook was inert from the day it was copied in and nobody could tell, a hook
+that never fires looking exactly like a hook with nothing to report (found
+2026-09-11). The test is now **negative**: anything not a doc counts as code.
+It cannot be wrong about a layout it never names.
+
+`^.. ` still matches the status short-format's two status columns, so a file
+merely *named* `docs` deeper in a path does not count as documentation.
 
 ---
 
