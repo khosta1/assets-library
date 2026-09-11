@@ -5,6 +5,10 @@ Answers the questions that otherwise cost a file read each -- what types exist,
 what fields they hold, which file defines what, what includes what, and where
 the weight is -- for the price of one page in a browser.
 
+"Where the weight is" is a chart, not a sorted list: a bar per file, grouped by
+directory, at the top of the page. It used to be the ordering of the accordion
+alone, which nobody read as an answer because every row was collapsed and grey.
+
 No compiler, no language server, no dependency. Two backends:
 
     .py                 exact, via the stdlib `ast`
@@ -311,16 +315,84 @@ td.dc { color:var(--dim); font-style:italic; }
 .chip { background:var(--chip); border-radius:4px; padding:1px 6px; font-size:11px;
         color:var(--dim); }
 .hidden { display:none; }
+#weight { margin:16px 20px 0; border:1px solid var(--line); border-radius:8px; }
+#weight > summary { padding:9px 14px; }
+.wbody { padding:2px 14px 14px; }
+.wgrp { margin:12px 0 3px; display:flex; gap:8px; align-items:baseline; }
+.wgrp b { font-weight:600; }
+.wrow { display:flex; gap:8px; align-items:center; padding:1px 0; cursor:pointer; }
+.wrow:hover .wname { color:var(--accent); }
+.wname { width:230px; flex:none; overflow:hidden; text-overflow:ellipsis;
+         white-space:nowrap; }
+.wtrack { flex:1; min-width:60px; background:var(--chip); border-radius:3px; }
+.wbar { display:block; height:13px; border-radius:3px; }
+.wnum { width:62px; flex:none; text-align:right; color:var(--dim); font-size:11px; }
 </style>
 <header>
   <h1>codemap &middot; %(project)s</h1>
   <input id="q" placeholder="filter files, types, fields, functions...">
   <span class="stats" id="stats"></span>
 </header>
+<details id="weight" open>
+  <summary><b>weight</b> <span class="n" id="wstats"></span></summary>
+  <div class="wbody" id="wout"></div>
+</details>
 <main id="out"></main>
 <script>
 const DATA = %(data)s;
 const out = document.getElementById('out'), q = document.getElementById('q');
+const wout = document.getElementById('wout'), wstats = document.getElementById('wstats');
+
+// Mid-tone hues, chosen to stay legible on both the light and the dark ground
+// rather than being pretty on one of them. One colour per DIRECTORY: the
+// question the chart answers is "which part of the tree is heavy", and a
+// per-file palette answers a question nobody asked.
+const WCOL = ['#4f7cd4','#3fa08a','#c98a3a','#b5606e','#8a72c4','#6e8a4f'];
+
+function dirOf(rel){ const i = rel.lastIndexOf('/'); return i < 0 ? '.' : rel.slice(0, i); }
+
+// Bars scale to the biggest file SHOWN, not the biggest in the repo, so
+// filtering to one directory rescales instead of collapsing into slivers.
+function renderWeight(list){
+  const max = list.reduce((m, f) => Math.max(m, f.lines), 1);
+  const total = list.reduce((s, f) => s + f.lines, 0);
+  const groups = new Map();
+  for (const f of list){
+    const d = dirOf(f.rel);
+    if (!groups.has(d)) groups.set(d, []);
+    groups.get(d).push(f);
+  }
+  const sum = fs => fs.reduce((s, f) => s + f.lines, 0);
+  const order = [...groups.entries()].sort((a, b) => sum(b[1]) - sum(a[1]));
+
+  let h = '', ci = 0;
+  for (const [dir, fs] of order){
+    const sub = sum(fs), col = WCOL[ci++ %% WCOL.length];
+    h += '<div class="wgrp"><b style="color:' + col + '">' + esc(dir) + '</b>'
+       + '<span class="n">' + sub.toLocaleString() + ' lines &middot; '
+       + Math.round(sub * 100 / total) + '%% of shown</span></div>';
+    for (const f of fs){
+      const w = Math.max(1, Math.round(f.lines * 100 / max));
+      h += '<div class="wrow" data-rel="' + esc(f.rel) + '" title="' + esc(f.rel) + '">'
+         + '<span class="wname">' + esc(f.rel.slice(dir === '.' ? 0 : dir.length + 1)) + '</span>'
+         + '<span class="wtrack"><span class="wbar" style="width:' + w + '%%;background:'
+         + col + '"></span></span>'
+         + '<span class="wnum">' + f.lines.toLocaleString() + '</span></div>';
+    }
+  }
+  wout.innerHTML = h;
+  wstats.textContent = total.toLocaleString() + ' lines across ' + list.length + ' files';
+}
+
+// A bar is a question -- "what is in there?" -- so clicking one filters the map
+// to that file and opens it, rather than being decoration you cannot act on.
+wout.addEventListener('click', e => {
+  const row = e.target.closest('.wrow');
+  if (!row) return;
+  q.value = row.dataset.rel;
+  render(q.value);
+  out.scrollIntoView({ behavior:'smooth', block:'start' });
+});
 
 function esc(s){ return (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
@@ -348,11 +420,10 @@ function renderType(t){
 
 function render(filter){
   const f = (filter||'').toLowerCase();
-  let shown = 0, lines = 0;
-  out.innerHTML = DATA.map(file => {
-    const blob = JSON.stringify(file).toLowerCase();
-    if (f && !blob.includes(f)) return '';
-    shown++; lines += file.lines;
+  const list = DATA.filter(file => !f || JSON.stringify(file).toLowerCase().includes(f));
+  let lines = 0;
+  out.innerHTML = list.map(file => {
+    lines += file.lines;
     let h = '<details' + (f ? ' open' : '') + '><summary><b>' + esc(file.rel) + '</b>'
           + '<span class="n">' + file.lines + ' lines &middot; '
           + file.types.length + ' types &middot; ' + file.funcs.length + ' functions</span></summary>'
@@ -373,7 +444,8 @@ function render(filter){
     return h + '</div></details>';
   }).join('');
   document.getElementById('stats').textContent =
-    shown + ' files, ' + lines.toLocaleString() + ' lines';
+    list.length + ' files, ' + lines.toLocaleString() + ' lines';
+  renderWeight(list);
 }
 
 q.addEventListener('input', () => render(q.value));

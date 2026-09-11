@@ -1,6 +1,10 @@
 AI base workflow tools
 baseline: H:\Code\AI_base_workflow
-version:  2  (2026-09-11)
+version:  3  (2026-09-12)
+
+v3  codemap.py: "where the weight is" was only the accordion's sort order, and
+    every row was collapsed and grey, so nobody read it as an answer. It is now
+    a bar chart at the top of the page, grouped by directory, click-to-filter.
 
 v2  stale.py: `--since` is inclusive, so a doc committed in the same commit as
     its subject counted that commit as drift. Every project reported false
