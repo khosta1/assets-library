@@ -32,6 +32,11 @@ and verifies clean.
 - **HDR/EXR thumbnails** — decoded, exposure from a high percentile,
   subsampled while reading.
 - **Bounded preview cache** — `ui/thumbcache.py`, invalidated on edit.
+- **Forced dark theme** — `ui/theme.py`, one `setColorScheme(Dark)` in `main()`
+  before the first widget. Every colour is palette-derived; no literal left in
+  a widget. Not a preference and not OS-following — see `docs/decisions.md`.
+- **Sidebar collapsed by default** — types start closed; what you open survives
+  the rebuild that follows every add, edit, delete and F5.
 - **FTS search** — free text prefix-matched, filters `type: cat: tag: res:
   src:`, each negatable with `-`.
 - **Verify, and verify deep** — Library ▸ Verify. Deep recomputes digests,

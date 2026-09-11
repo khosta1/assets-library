@@ -26,6 +26,7 @@ from assetlib import upgrade
 from assetlib.edit import delete_asset
 from assetlib.verify import verify
 
+from . import theme
 from . import thumbcache
 
 from .gridmodel import ROW_ROLE, AssetGridModel, _human
@@ -181,7 +182,19 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ tree
 
     def _build_tree(self) -> None:
+        # Types collapsed by default: 17 of them, 107 categories between them,
+        # and the declared taxonomy is a place to go looking rather than a list
+        # to read. Opened all at once it is a wall no one scans.
+        #
+        # What the user opened survives the rebuild, because _build_tree() also
+        # runs after every add, edit, delete and F5. Without this, adding one
+        # asset would fold the sidebar back up under you - which is exactly the
+        # annoyance the old unconditional expand was hiding.
         counts = idx.counts(self.conn)
+        open_types = {self.tree.topLevelItem(i).data(0, TYPE_ROLE)
+                      for i in range(self.tree.topLevelItemCount())
+                      if self.tree.topLevelItem(i).isExpanded()}
+
         self.tree.blockSignals(True)
         self.tree.clear()
 
@@ -202,7 +215,7 @@ class MainWindow(QMainWindow):
             node.setFont(0, bold)
             node.setDisabled(False)
             if n == 0:
-                node.setForeground(0, Qt.gray)
+                node.setForeground(0, theme.dim_colour())
             self.tree.addTopLevelItem(node)
 
             for cat in self.cfg.categories_for(tid):
@@ -211,10 +224,10 @@ class MainWindow(QMainWindow):
                 leaf.setData(0, TYPE_ROLE, tid)
                 leaf.setData(0, CAT_ROLE, cat)
                 if cn == 0:
-                    leaf.setForeground(0, Qt.gray)
+                    leaf.setForeground(0, theme.dim_colour())
                 node.addChild(leaf)
-            if n:
-                node.setExpanded(True)
+            # first build: open_types empty -> everything closed
+            node.setExpanded(tid in open_types)
 
         self.tree.blockSignals(False)
         self.tree.setCurrentItem(root)
@@ -528,6 +541,7 @@ def main(cfg=None) -> int:
     cfg.ensure_roots()
     cfg.ensure_tree()
     app = QApplication.instance() or QApplication(sys.argv)
+    theme.apply(app)                    # before the first widget, see theme.py
     win = MainWindow(cfg)
     win.show()
     return app.exec()

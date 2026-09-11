@@ -20,7 +20,7 @@ from pathlib import Path
 
 from PySide6.QtCore import (QAbstractTableModel, QModelIndex, QObject, QRunnable,
                             Qt, Signal)
-from PySide6.QtGui import QColor, QPixmap
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QFileDialog,
                                QFrame, QHBoxLayout, QLabel, QLineEdit,
@@ -36,6 +36,7 @@ from assetlib.model import Asset, to_token
 from assetlib.naming import normalise
 from assetlib.thumbnail import thumb_bytes, why_not
 
+from . import theme
 from . import writepool
 from .gridmodel import _human
 
@@ -250,7 +251,7 @@ class FileTableModel(QAbstractTableModel):
             if col == COL_SIZE:
                 return _human(row.size)
         if role == Qt.ForegroundRole and a.action == "reject":
-            return QColor(Qt.gray)
+            return theme.dim_colour()
         if role == Qt.ToolTipRole:
             tiles = row.tiles
             head = (f"{len(tiles)} tiles: {tiles[0]}-{tiles[-1]}\n" if len(tiles) > 1 else "")

@@ -107,6 +107,9 @@ OpenEXR 3.4.14, xxhash 4.0.1.
 
 ## How to work here
 
+- **`plan` at the end of a request means plan only.** Write the approach, change
+  nothing — no edits, no commits. Reading and searching to build the plan is
+  fine. Absent the word, work as normal.
 - **No verification loops.** Do not write or run a test, a benchmark or a probe
   script without asking first. One pass, one report; Felix observes the app.
 - **Check `docs/gotchas.md` before debugging an import.** Twelve of them are
@@ -117,4 +120,10 @@ OpenEXR 3.4.14, xxhash 4.0.1.
 - **Check the change against the invariants** in `docs/architecture.md` before
   presenting it as finished.
 - **Comments argue.** They say why a decision was taken and what failed before.
+  Those are never compressed.
+- **Caveman for WHAT, prose for WHY.** A comment that only describes drops
+  articles, copulas, pronouns and hedges — `# decode: shared pool. write: own
+  pool, 1 thread.` A comment that gives a reason stays full prose. Exempt:
+  everything in `docs/`, and every user-facing string. New and touched code
+  only, never a retroactive sweep. `docs/decisions.md`.
 - Language: English everywhere — prose, code, comments.

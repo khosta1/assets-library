@@ -67,6 +67,52 @@ of those appears as a row that can be overridden.
 | **`python.exe`, not `pythonw.exe`**, inside that launcher | `pythonw` discards stderr, so a crash would leave nothing to look at. Instead the console is never shown (Run window style 0) and output is redirected to `launch.log` — silent when all is well, diagnosable when it is not. |
 | **Do not copy a venv onto the disk** | Venvs hardcode absolute paths. The bundled `runtime/` is a full Python, which does not. |
 | **Git, and one folder = one repo** | Added 2026-09-11. The code existed in exactly one place, on a disk with no backup. `library/`, `runtime/` and `.assetlib/` stay out of it — they are data and are large. |
+| **Dark is forced, not followed** | Added 2026-09-12. The content of this window is images and much of it is colour-critical — a basecolor being judged, an HDRI's exposure, a normal map checked for a green-channel mistake. Light chrome shifts how those read, which is why every DCC this library feeds ships dark. Following the OS would also make one library look different depending on which machine the external disk reaches, against the same portability the window title protects. One line in `main()`; every colour decision lives in `ui/theme.py`. No toggle, no preference file. |
+
+---
+
+## Comment register: caveman for WHAT, prose for WHY
+
+Taken **2026-09-12**.
+
+> **A comment that describes is written in caveman. A comment that argues is
+> written in prose. The second kind is never compressed.**
+
+Caveman drops articles, copulas, pronouns standing in for code, and hedges.
+It keeps identifiers exact, numbers exact, and units:
+
+```python
+# CAVEMAN - describes. No argument in it to lose.
+# decode: shared pool. write: own pool, 1 thread.
+# analyse: read-only. commit: only writer.
+# src ext -> slot via texture_slots.json, first match wins.
+
+# PROSE - argues. Compressing this destroys the reason.
+# Twenty 8K TIFFs occupy every thread for a minute, and a write job queued
+# behind them never starts, so the progress dialog sits there forever and
+# the signal that would close it never fires. That is gotcha 7.
+```
+
+**Why this and not caveman everywhere.** The descriptive half of a comment is
+filler that survived because nobody charged it rent — it restates the line
+below it and goes stale the moment that line changes. The arguing half is the
+only thing in this repo that cannot be recovered by reading the code, and it is
+what `docs/gotchas.md` exists to protect. Compressing both treats them as the
+same material. They are not: one is worth 40 tokens, the other is worth an
+afternoon.
+
+**Exempt, always, and not by judgement call:**
+
+- any comment giving a reason, a history, or a thing that failed before
+- everything under `docs/` — those documents argue by definition
+- user-facing strings: window text, tooltips, dialogs, status messages. Felix
+  reads those while something is going wrong, not while studying the code.
+- `asset.json` field names and config keys — data, not prose
+
+**Not applied retroactively.** The convention governs new code and any comment
+whose line is being touched anyway. A sweep over 5 050 lines would rewrite
+hundreds of comments nobody asked about, and every one of those diffs is a
+chance to delete an argument by mistake.
 
 ---
 
@@ -88,3 +134,4 @@ of those appears as a row that can be overridden.
 |---|---|---|
 | The interface | CLI + GUI → **GUI only** | 2026-08-21. The CLI's real job was forcing `assetlib` to stay UI-free; that discipline is now stated as an import rule and does not need a second front-end to prove it. `docs/History/cli-removed.md`. |
 | Where the tool lives | "somewhere on H:" → its own git repo | 2026-09-11. |
+| Comment register | one register → **two: caveman for WHAT, prose for WHY** | 2026-09-12. Not a reversal of "comments argue" but a narrowing of it: the arguing comments are exempt from compression, so the rule that protects them is unchanged. What loses its articles is the descriptive filler that was never carrying a reason. |

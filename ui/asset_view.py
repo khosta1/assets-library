@@ -22,7 +22,7 @@ from pathlib import Path
 
 from PySide6.QtCore import (QAbstractListModel, QModelIndex, QObject, QRunnable,
                             QSize, Qt, QThreadPool, Signal)
-from PySide6.QtGui import QColor, QIcon, QPixmap
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QDialog, QHBoxLayout, QLabel,
                                QListView, QPlainTextEdit, QPushButton,
                                QSplitter, QStackedWidget, QVBoxLayout, QWidget)
@@ -31,6 +31,7 @@ from assetlib.edit import package_files
 from assetlib.model import ASSET_FILE, Asset, role_of, roles
 from assetlib.thumbnail import render, why_not
 
+from . import theme
 from . import thumbcache
 from .gridmodel import _human
 
@@ -178,7 +179,7 @@ class PackageModel(QAbstractListModel):
     @staticmethod
     def _badge(text: str) -> QIcon:
         pix = QPixmap(TILE_PX, TILE_PX)
-        pix.fill(QColor(58, 58, 62))
+        pix.fill(theme.tile_colour())
         return QIcon(pix)
 
     def _icon_for(self, entry: Entry) -> QIcon:

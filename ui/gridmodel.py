@@ -16,7 +16,9 @@ from pathlib import Path
 
 from PySide6.QtCore import (QAbstractListModel, QModelIndex, QObject, QRunnable,
                             QSize, Qt, QThreadPool, Signal)
-from PySide6.QtGui import QColor, QIcon, QImage, QPixmap
+from PySide6.QtGui import QIcon, QImage, QPixmap
+
+from . import theme
 
 UUID_ROLE = Qt.UserRole + 1
 ROW_ROLE = Qt.UserRole + 2
@@ -97,7 +99,7 @@ class AssetGridModel(QAbstractListModel):
     @staticmethod
     def _make_placeholder() -> QIcon:
         pix = QPixmap(512, 512)
-        pix.fill(QColor(58, 58, 62))
+        pix.fill(theme.tile_colour())
         return QIcon(pix)
 
     def _icon_for(self, row) -> QIcon:
