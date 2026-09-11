@@ -4,6 +4,73 @@ Newest first.
 
 ---
 
+## 2026-09-12 — four dimensions the planner did not have
+
+**Done.** Five commits on `fix/scaffold-shakeout`, unmerged.
+
+- `66cc48c` — four template bugs, fixed in this tree **and** in
+  `H:/Code/AI_base_workflow/template/`. `stale.py` counted a doc's own creating
+  commit as drift (`--since` is inclusive); the Stop hook tested `^.. src/`, a
+  directory this project does not have, so it was inert from the day it was
+  copied in; that hook pointed at `BOOTSTRAP.md`, which lives in the baseline
+  and never ships; SessionStart's `stale.py` exits 1 on drift and the harness
+  drops a failing hook's stdout, so the report vanished exactly when it had
+  something to say.
+- `34e4ce2` — `codemap.py` weight chart, tools **v3**. "Per-file line weight"
+  had been satisfied by the accordion's sort order and a grey count in a
+  collapsed summary, which nobody read as an answer.
+- `f05a95c` — forced dark (`ui/theme.py`, **confirmed working in the window**),
+  sidebar collapsed by default with expansion surviving the rebuild, and the
+  caveman comment convention.
+- `31f4b7b` — the import pipeline, schema **v4 → v5 → v6**:
+  resolutions kept per slot (`res_patterns`, size measured from pixels);
+  `lods[N].representations` as a list, fixing a silent overwrite;
+  `geometry_ext` routing on the extension whatever the type; geometry variants
+  keyed `(ext, lod, variant)`.
+- `verify` gained an **orphan check** — every other check asks whether a
+  pointer resolves, none asked whether a file has one.
+- Baseline `H:/Code/AI_base_workflow` is now a git repo (`c2be6fc`, `df8569e`,
+  `6efdd8c`). It had no history at all.
+- Gotchas **13** and **14** written. `docs/decisions.md` gained four rows,
+  `docs/features.md` four entries.
+
+**Decided.** Every new dimension is **additive** — `textures[slot]` still names
+the biggest size, `lods[N].geo` still names one file — because that is what
+`_promote_hero_lod` already does and it means no existing reader, and no future
+adapter, has to know a dimension appeared. Resolution is **measured, never read
+from the filename**: Megascans writes `16384ppm`, which is pixels-per-metre and
+is 4096px on a quarter-metre plant. Variants are **pre-filled, never decided**
+by the pattern. `primary_ext`, `geometry_ext` and `mesh_extensions()` are three
+lists because they answer three questions; the reasoning for all of it is in
+`docs/decisions.md`.
+
+**Open.** Nothing half-built, but one large gap in what has been *seen*.
+
+- **No import has ever been committed to disk under this code.** Everything was
+  verified with read-only `analyse()` plus in-memory `bind()`/promote. The
+  commit path has never written a multi-resolution or multi-variant package,
+  never renamed one on edit, and `_editing/old/` has not been exercised since
+  the schema moved.
+- **The Res and Var columns have not been looked at.** The window was running
+  on pre-`f05a95c` code all evening; only the dark theme was confirmed.
+- Three orphans stand in the library, reported by the new check and left alone:
+  a `.rat` beside an HDRI, and two `_lod1/_lod2.jpg` files in
+  `texture/decal/smudgeslarge001…` whose asset has `lods={1,2}` and **zero**
+  texture bindings — that last one is a real binding bug in the texture-set
+  planner, diagnosed but not fixed.
+- `_promote_lod_geo` picks **first-bound**, which is arbitrary. There is no
+  geometry `format_priority` anywhere; `primary_ext` order is never read. Left
+  arbitrary on purpose rather than burying the decision in a bug fix.
+- `matching.strip_before_match` in `texture_slots.json` is dead config —
+  declared, never read, and overlapping what `res_patterns` now does. Needs
+  `/retire`, not a silent delete.
+- The library holds **57** assets, not the 8 `features.md` claimed all evening.
+
+**Next.** Restart the app and import one Megascans plant end to end — the
+commit path is the only part of this that has never run.
+
+---
+
 ## 2026-09-11 — scaffold shake-out
 
 **Done.** Ran four of the six tools against this tree for the first time.

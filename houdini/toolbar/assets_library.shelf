@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<shelfDocument>
+  <!-- Assets Library shelf. Houdini reads this because the package file puts
+       $ASSETLIB/houdini on `path`; nothing is copied into the Houdini prefs
+       except the package .json itself, so the tools travel with the repo. -->
+
+  <toolshelf name="assets_library" label="Assets Library">
+    <memberTool name="assetlib_seam"/>
+    <memberTool name="assetlib_browse"/>
+  </toolshelf>
+
+  <tool name="assetlib_seam" label="Seam test" icon="MISC_python">
+    <helpText><![CDATA[Check that `import assetlib` works in this Houdini, that
+the library is readable, and that runtime/ is NOT on sys.path. Prints to the
+Python shell. Run this once per Houdini version before trusting anything
+else.]]></helpText>
+    <script scriptType="python"><![CDATA[
+from assetlib_hou import seam
+seam.run()
+]]></script>
+  </tool>
+
+  <tool name="assetlib_browse" label="Browse library" icon="BUTTONS_folder">
+    <helpText><![CDATA[Open the Assets Library browser.
+
+Launched as a SEPARATE PROCESS on the bundled runtime, deliberately. The window
+is PySide6 and Houdini 20.5 ships PySide2; loading a second Qt into this process
+crashes the host rather than raising an error. A subprocess cannot do that, and
+costs nothing here because the browser has no reason to touch `hou`.]]></helpText>
+    <script scriptType="python"><![CDATA[
+from assetlib_hou import launch
+launch.browser()
+]]></script>
+  </tool>
+
+</shelfDocument>

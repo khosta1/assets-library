@@ -135,3 +135,42 @@ while reading.
 only.
 
 **Rule:** the window must never walk the filesystem during interaction.
+
+---
+
+**13. A regex in a JSON config needs its backslash doubled, and a heredoc
+eats one more** — 2026-09-12
+
+`"_\d+ppm"` is not valid JSON: `\d` is not an escape the parser knows, so the
+file fails to load with `Invalid \escape` and a line number pointing at the
+config, not at the code that wrote it. It must be `"_\\d+ppm"` — **two**
+backslashes in the file — which the parser hands to `re` as `_\d+ppm`.
+
+Writing that config *through a shell heredoc* eats a further layer, so the
+string that looked right in the script landed in the file with one backslash.
+It happened twice on the same evening, to `texture_slots.json` and then to
+`library.json`.
+
+**Rule:** after writing any config that contains a regex, `json.load` it and
+`re.compile` every pattern before doing anything else. Both failures were
+silent until the next read, and the second one only looked different because
+the line number moved.
+
+---
+
+**14. Verifying during a migration reports the migration as damage**
+— 2026-09-12
+
+`Asset.write()` is atomic: `mkstemp` beside `asset.json`, write, `os.replace`.
+So during a schema migration every package holds a `.asset-*.tmp` for a few
+milliseconds, and a handful of packages are still on the old version at any
+instant.
+
+`verify` run at that moment reported in-flight temp files as orphans and the
+not-yet-rewritten packages as schema skew. Nothing was wrong. The app had been
+launched in another process and was migrating 57 assets while the check ran.
+
+**Rule:** an orphan check skips `.asset-*.tmp`, and a version-skew report is
+only trustworthy when nothing else is writing. Neither is a reason to stop
+verifying — it is a reason to look at what else is running before believing it.
+

@@ -117,8 +117,8 @@ Identical for every type; absent sections simply do not appear.
 ```
 library/texture/concrete/concrete014/
 ├─ asset.json      truth
-├─ tex/            <asset>[_lodN]_<slot>[.udim].<ext>
-├─ geo/            <asset>[_lodN].<ext>
+├─ tex/            <asset>[_lodN]_<slot>[_<res>][.udim].<ext>
+├─ geo/            <asset>[_<variant>][_lodN].<ext>
 ├─ preview/        thumb.jpg (512px)
 ├─ derived/        .tx / .rat / .usda - regenerable, deletable, NOT backed up
 └─ extra/          bonus files, kept verbatim, never interpreted
@@ -127,6 +127,18 @@ library/texture/concrete/concrete014/
 Three levels above it, always: `{type}` from `types.json` (17), `{category}`
 from the closed vocabulary in `categories.json` (107). No deeper nesting, no
 per-type exceptions.
+
+**Token order is load-bearing** (2026-09-12). The UDIM tile must remain the
+last dot-segment before the extension or `<UDIM>` stops being the spelling
+Houdini, Karma, Arnold and Mari resolve natively — so the resolution token
+sits before it, never after. A token appears **only when there is something
+to tell apart**: one size, or one variant, means no token at all and a
+filename identical to what the library has always written.
+
+Four dimensions now identify a file — slot, LOD, resolution, variant — and
+each is recorded in `asset.json` rather than parsed back out of the name. The
+name is for a human reading a directory listing; the JSON is what anything
+downstream reads.
 
 ---
 
@@ -184,15 +196,23 @@ Everything above, as the list to check a change against. `verify.py` enforces
    the file list shown first.
 8. **A digest carries its algorithm**, and unverifiable is never reported as
    corrupted (gotcha 8).
-9. **Names are `lower_snake`**, with resolution, format and LOD tokens
-   stripped — so a 4K version of an 8K asset resolves to the same name and
-   merges as a variant.
+9. **Names are `lower_snake`**, with resolution, format, LOD **and variant**
+   tokens stripped — so a 4K version of an 8K asset resolves to the same
+   name, and a Big shipped without its Small is not named `..._big`.
 10. **Types are data.** Adding SpeedTree/Marvelous/GAEA support is editing
     `types.json`; only the precedence *between* types is code.
 11. **`iter_assets()` stops descending at a package.** A package can contain
     another `asset.json` (gotcha 6).
 12. **Normals are stored OpenGL-only.** DirectX is an exact green-channel
     inversion, regenerated on demand; a DX-only source is converted at import.
+13. **A dimension is added additively.** `textures[slot]` names the biggest
+    resolution, `lods[N].geo` names one geometry file, the hero LOD is
+    mirrored into the top level — every reader gets the best version without
+    knowing the dimension exists. Schema v4, v5 and v6 each added a field and
+    changed no existing path.
+14. **Every file in a package is pointed at by `asset.json`**, except under
+    `extra/`, `derived/`, `preview/` and `_editing/`. `verify` checks both
+    directions: that a pointer resolves, and that a file has one.
 
 ---
 

@@ -73,7 +73,26 @@ are more risk.
 
 ## Open bugs
 
-*Scaffold, not the app. The app was not touched on 2026-09-11.*
+**App, found 2026-09-12 by the new orphan check in `verify`:**
+
+- **A texture set with LOD-tagged textures binds none of them.**
+  `texture/decal/smudgeslarge001_overlay_var1_6k` has `lods={1,2}` and **zero**
+  entries in `textures`; `_lod1.jpg` and `_lod2.jpg` sit on disk pointed at by
+  nothing. Diagnosed, not fixed. Likely `_emit_slot_actions` recording a level
+  without binding its maps.
+- **`.rat`/`.tx` beside a mesh or an HDRI land in `extra/`, not `derived/`.**
+  `derived_ext` is `['.tx','.rat']` on the `texture` type and **null** on
+  `model`, `scan`, `vegetation`, `hdri`. So regenerable bakes sit in the part
+  of the package that is meant to be kept. One `.rat` is in the library now.
+  Worth deciding first whether a vendor bake should be trusted at all — it was
+  baked against the vendor's filenames, which is the argument that got vendor
+  `.mtlx`/`.usdc` discarded.
+- **No format ranking for geometry.** `primary_ext` is a membership list whose
+  order is never read, so which of `.abc/.fbx/.obj/.usd` becomes `primary` is
+  whichever the filesystem yields first. `_promote_lod_geo` is deliberately
+  first-bound until this is decided. Probably `.usd` first for `model`.
+
+**Scaffold, found 2026-09-11, still open:**
 
 - **Seven of nine docs are watched by nothing.** Only `architecture.md` and
   `features.md` carry a `<!-- covers: -->` line, so `stale.py` skips the rest

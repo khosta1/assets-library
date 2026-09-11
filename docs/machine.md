@@ -59,6 +59,12 @@ Houdini's bundled Pythons: 20.5 → 3.7/3.9/3.11, 21.0 → 3.7/3.9/3.11, 22.0 �
 3.10/3.11/3.13. **3.11 is the only version all three share** — which is why the
 project pins it; the reason lives in `docs/decisions.md`.
 
+**Measured 2026-09-12**, first `import assetlib` inside Houdini: launching
+22.0.368 gives Python **3.13.10** and PySide6, and the core imports cleanly on
+it. So the pin is a floor rather than a requirement — writing to 3.11 syntax is
+what keeps 20.5 working, and everything newer follows for free. The seam test
+(`houdini/`) checks `>= 3.11`.
+
 Outside the bundled runtime: `pip install PySide6 Pillow numpy openexr xxhash`.
 Only PySide6 and Pillow are truly required — without numpy/OpenEXR you lose HDR
 and EXR thumbnails, and xxhash falls back to blake2b.

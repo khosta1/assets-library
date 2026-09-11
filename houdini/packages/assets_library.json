@@ -1,0 +1,9 @@
+{
+    "enable": true,
+    "env": [
+        { "ASSETLIB": "H:/Code/Assets_library" },
+        { "PYTHONPATH": { "value": "$ASSETLIB", "method": "append" } },
+        { "PYTHONPATH": { "value": "$ASSETLIB/houdini/python", "method": "append" } }
+    ],
+    "path": "$ASSETLIB/houdini"
+}
