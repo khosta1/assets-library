@@ -15,7 +15,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QSize, QTimer
 from PySide6.QtGui import QAction, QFont
-from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QLineEdit,
+from PySide6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel, QLineEdit,
                                QListView, QMainWindow, QMenu, QMessageBox,
                                QPushButton, QSlider, QSplitter, QStatusBar,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout,
@@ -383,6 +383,51 @@ class MainWindow(QMainWindow):
             self.refresh()
             self.statusBar().showMessage(f"updated {row['name']}")
 
+    def _has_geometry(self, row) -> bool:
+        """Does this asset hold a mesh? Answered from the index, never from disk.
+
+        `has_geo` is computed when the asset is indexed. It is NULL for a row
+        written before the column existed, and that is not the same as 0: an
+        old index would otherwise claim every asset is mesh-free and the menu
+        entry would vanish everywhere until someone pressed F5. So an unknown
+        falls back to the type's ingest strategy, which is in memory already.
+        """
+        known = row.get("has_geo")
+        if known is not None:
+            return bool(known)
+        tdef = self.cfg.type_by_id.get(row.get("type"), {})
+        return tdef.get("ingest") == "mesh_plus_textures"
+
+    def _import_houdini(self) -> None:
+        """Ask what to build, then build it - or leave a request for the shelf.
+
+        Lazily imported like Add and Edit, for the same reason: a fault on this
+        path must not be able to stop the browser from opening.
+        """
+        path = self._selected_dir()
+        if path is None:
+            return
+
+        from assetlib.model import Asset
+
+        from .import_houdini import HoudiniImportDialog, send
+
+        try:
+            asset = Asset.read(path)
+        except Exception as exc:                        # noqa: BLE001
+            QMessageBox.critical(self, "Cannot read this asset", str(exc))
+            return
+
+        dialog = HoudiniImportDialog(asset, self.cfg, self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        try:
+            message = send(asset, path, self.cfg, dialog.options())
+        except Exception as exc:                        # noqa: BLE001
+            QMessageBox.critical(self, "Import to Houdini failed", str(exc))
+            return
+        self.statusBar().showMessage(message)
+
     def _context_menu(self, point) -> None:
         """Right-click on a tile.
 
@@ -400,6 +445,10 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         menu.addAction("Contents…", self._view_asset)
         menu.addAction("Edit…", self._edit_asset)
+        if self._has_geometry(row):
+            menu.addSeparator()
+            menu.addAction("Import to Houdini…", self._import_houdini)
+        menu.addSeparator()
         menu.addAction("Open folder", self._open_folder)
         menu.addSeparator()
         menu.addAction(f"Delete {row['name']}…", self._delete_asset)

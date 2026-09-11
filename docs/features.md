@@ -29,6 +29,15 @@ assets and verifies clean apart from three orphan warnings (see `ROADMAP.md`).
   from the measured pixel width (`16k`), re-emitted as `_<res>` before the
   UDIM tile; biggest promoted into `textures[slot]` by
   `commit._promote_best_resolution()`. `res:4k` asks *has this size*.
+- **Import to Houdini** — right-click an asset. Options dialog lives in the
+  library (`ui/import_houdini.py`), never in Houdini: opacity mode,
+  displacement, resolution, variant, USD variant set, localize to `$HIP`.
+  Inside a Python Panel it calls the builder directly; standalone it writes
+  `.assetlib/request.json` for the `Build last request` shelf button.
+  **The builder itself is not ported yet** — the request is written and
+  readable, and the shelf says so plainly.
+- **Houdini seam** — `houdini/`, one package file to install. Passes on
+  22.0.368 / Python 3.13.10 / PySide6.
 - **Geometry variants** — schema v6. A second version of one asset (Big/Small,
   Var01) is kept rather than losing the format contest, keyed
   `(ext, lod, variant)` and named `<asset>_<variant>[_lodN].<ext>`. Pre-filled

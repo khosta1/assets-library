@@ -19,7 +19,7 @@ from pathlib import Path
 
 import hou
 
-PICK_FILE = "pick.json"
+REQUEST_FILE = "request.json"
 
 
 def _root() -> Path:
@@ -51,15 +51,16 @@ def browser() -> None:
                      creationflags=flags)
 
 
-def last_pick() -> dict | None:
+def last_request() -> dict | None:
     """What the browser last asked to be built, or None.
 
-    Written by the window, read here. Not consumed: re-running the build tool
-    on the same pick is a thing someone will want to do.
+    Written by the window, read here. NOT consumed - re-running the build on the
+    same request is a thing someone will want to do, and a file that deletes
+    itself when read is a file you cannot debug.
     """
     import json
 
-    path = _root() / ".assetlib" / PICK_FILE
+    path = _root() / ".assetlib" / REQUEST_FILE
     if not path.is_file():
         return None
     try:
@@ -67,3 +68,36 @@ def last_pick() -> dict | None:
             return json.load(fh)
     except Exception:                                # noqa: BLE001
         return None
+
+
+def build_last_request() -> None:
+    """Shelf entry point: read the request and hand it to the builder."""
+    request = last_request()
+    if request is None:
+        raise hou.Error("no request - pick an asset in the library window and "
+                        "choose 'Import to Houdini'")
+
+    # No sys.path juggling: the package file puts $ASSETLIB on PYTHONPATH and
+    # the seam test is what confirms it. Patching the path here as a safety net
+    # would mean the seam test could pass while the real mechanism was broken.
+    from assetlib.config import find_config
+    from assetlib.model import Asset
+
+    cfg = find_config()
+    asset_dir = cfg.library / request["path"]
+    if not asset_dir.is_dir():
+        raise hou.Error(f"the request points at {asset_dir}, which is not there")
+
+    try:
+        from . import build
+    except ImportError:
+        # Not an error worth hiding behind a stack trace: the request itself is
+        # fine, and saying so is what tells you the library half works while the
+        # Houdini half is simply not written yet.
+        raise hou.Error(
+            "The Houdini builder is not ported yet (assetlib_hou/build.py).\n\n"
+            "The request is valid and readable:\n"
+            f"  {request['name']}  ({request['type']}/{request['category']})\n"
+            f"  options: {request['options']}")
+
+    build.karma_component(Asset.read(asset_dir), asset_dir, cfg, request["options"])

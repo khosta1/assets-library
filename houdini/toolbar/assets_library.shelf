@@ -7,6 +7,7 @@
   <toolshelf name="assets_library" label="Assets Library">
     <memberTool name="assetlib_seam"/>
     <memberTool name="assetlib_browse"/>
+    <memberTool name="assetlib_build"/>
   </toolshelf>
 
   <tool name="assetlib_seam" label="Seam test" icon="MISC_python">
@@ -30,6 +31,18 @@ costs nothing here because the browser has no reason to touch `hou`.]]></helpTex
     <script scriptType="python"><![CDATA[
 from assetlib_hou import launch
 launch.browser()
+]]></script>
+  </tool>
+
+  <tool name="assetlib_build" label="Build last request" icon="SOP_material">
+    <helpText><![CDATA[Build whatever the library window last asked for.
+
+The window writes .assetlib/request.json when it cannot build directly - which
+is any time it is running standalone rather than as a Python Panel. The request
+is not consumed, so this can be run again on the same asset.]]></helpText>
+    <script scriptType="python"><![CDATA[
+from assetlib_hou import launch
+launch.build_last_request()
 ]]></script>
   </tool>
 

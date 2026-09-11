@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS assets (
     size        INTEGER DEFAULT 0,
     resolution  INTEGER,
     resolutions TEXT DEFAULT '',
+    has_geo     INTEGER,
     tags        TEXT DEFAULT '',
     created     TEXT
 );
@@ -48,6 +49,12 @@ def connect(cfg) -> sqlite3.Connection:
     have = {row[1] for row in conn.execute("PRAGMA table_info(assets)")}
     if "resolutions" not in have:
         conn.execute("ALTER TABLE assets ADD COLUMN resolutions TEXT DEFAULT ''")
+    if "has_geo" not in have:
+        # Deliberately NULL, not 0. NULL means "this row predates the column and
+        # nobody has looked", which a caller can tell apart from 0, "looked, and
+        # there is no geometry". Defaulting to 0 would make every asset claim it
+        # has no mesh until someone happened to press F5.
+        conn.execute("ALTER TABLE assets ADD COLUMN has_geo INTEGER")
     return conn
 
 
@@ -66,6 +73,29 @@ def _res_blob(asset) -> str:
     return (" " + " ".join(str(x) for x in labels) + " ") if labels else ""
 
 
+def _has_geometry(asset) -> int:
+    """1 when the package holds a mesh, 0 when it does not.
+
+    Answered here, at index time, because the browser must not read asset.json
+    to decide whether to show a menu entry - the window never walks the
+    filesystem during interaction, and a right-click is interaction.
+
+    Type is not the answer. A hand-declared texture asset can hold an .obj since
+    geometry routes on the extension, and a `model` whose mesh was skipped holds
+    none. The bindings are what is true.
+    """
+    for entry in asset.representations or []:
+        if (entry.get("file") or "").startswith("geo/"):
+            return 1
+    for level in (asset.lods or {}).values():
+        if (level or {}).get("geo"):
+            return 1
+        for entry in (level or {}).get("representations") or []:
+            if (entry.get("file") or "").startswith("geo/"):
+                return 1
+    return 0
+
+
 def _dir_size(path: Path) -> int:
     return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
 
@@ -74,15 +104,16 @@ def upsert(conn: sqlite3.Connection, asset: Asset, asset_dir: Path, library_root
     rel = str(asset_dir.relative_to(library_root)).replace("\\", "/")
     tags = " ".join(asset.tags)
     conn.execute(
-        "INSERT INTO assets (uuid,name,type,category,path,size,resolution,resolutions,tags,created) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?) "
+        "INSERT INTO assets (uuid,name,type,category,path,size,resolution,resolutions,"
+        "has_geo,tags,created) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(uuid) DO UPDATE SET name=excluded.name, type=excluded.type, "
         "category=excluded.category, path=excluded.path, size=excluded.size, "
         "resolution=excluded.resolution, resolutions=excluded.resolutions, "
-        "tags=excluded.tags",
+        "has_geo=excluded.has_geo, tags=excluded.tags",
         (asset.uuid, asset.name, asset.type, asset.category, rel,
          _dir_size(asset_dir), asset.fields.get("resolution"),
-         _res_blob(asset), tags, asset.created),
+         _res_blob(asset), _has_geometry(asset), tags, asset.created),
     )
     conn.execute("DELETE FROM assets_fts WHERE uuid = ?", (asset.uuid,))
     conn.execute(
