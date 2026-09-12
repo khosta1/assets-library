@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pythonPanelDocument>
+  <!-- Houdini reads this because the package file puts $ASSETLIB/houdini on
+       `path`. Windows > Python Panel > Assets Library, or add it to a pane tab.
+
+       The panel is the ONE-CLICK path: in this process `import hou` succeeds,
+       so right-click > Import to Houdini builds directly instead of leaving a
+       request for the shelf. -->
+
+  <interface name="assets_library" label="Assets Library"
+             icon="MISC_python" showNetworkNavigationBar="false"
+             help_url="">
+    <script><![CDATA[
+def createInterface():
+    from assetlib_hou import panel
+    return panel.create()
+]]></script>
+    <includeInToolbarMenu menu_position="300" create_separator="false"/>
+  </interface>
+
+</pythonPanelDocument>

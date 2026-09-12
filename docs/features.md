@@ -36,6 +36,13 @@ assets and verifies clean apart from three orphan warnings (see `ROADMAP.md`).
   `.assetlib/request.json` for the `Build last request` shelf button.
   **The builder itself is not ported yet** — the request is written and
   readable, and the shelf says so plainly.
+- **Houdini Python Panel** — the same `MainWindow` inside Houdini's process,
+  so right-click → Import builds directly instead of leaving a request.
+  Never touches `runtime/` or the host's palette.
+- **Karma / MaterialX / Solaris builder** — `houdini/python/assetlib_hou/
+  build.py`, 1 183 lines ported from the old shelf tool. Component chain,
+  MTLX subnet, opacity stencil, VDB foliage proxy, USD variant sets.
+  Reads `asset.json`; guesses nothing.
 - **Houdini seam** — `houdini/`, one package file to install. Passes on
   22.0.368 / Python 3.13.10 / PySide6.
 - **Geometry variants** — schema v6. A second version of one asset (Big/Small,

@@ -88,7 +88,24 @@ app is where importing belongs anyway, since it is where the plan table lives.
 
 ## Then
 
-`Assets Library` shelf, two buttons.
+### The panel — one click
+
+**Windows ▸ Python Panel ▸ Assets Library**, or drop it in a pane tab.
+
+This is the path worth using. The window runs in Houdini's process, so
+`import hou` succeeds, and right-click ▸ *Import to Houdini* builds the nodes
+**directly** — no request file, no second button.
+
+It is the same `ui.app.MainWindow` as the standalone app. Two things the panel
+deliberately does not do: it never puts `runtime/` on `sys.path` (a second
+PySide6 in the host's process crashes it), and it never calls `ui.theme.apply()`
+— that forces a colour scheme on the whole `QApplication`, which in here is
+Houdini's. The standalone app owns its process and may restyle it; a guest does
+not restyle the host.
+
+**Add and Edit still belong in the standalone app** — Houdini has no xxhash.
+
+### The shelf — three buttons
 
 **Seam test** — run this first, once per Houdini version. It checks the four
 things everything else assumes:

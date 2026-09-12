@@ -9,4 +9,4 @@ Houdini's own PySide2/6 when it is opened, never the PySide6 sitting in
 `runtime/` - two Qt libraries in one process crash the host rather than raising.
 """
 
-__all__ = ["seam", "launch"]
+__all__ = ["seam", "launch", "panel", "build"]
