@@ -4,6 +4,77 @@ Newest first.
 
 ---
 
+## 2026-09-12 (later) — Houdini reads the library, and B1 gets measured
+
+Same day as the entry below, which covers the import pipeline.
+
+**Done.** Three more commits on `fix/scaffold-shakeout`, still unmerged.
+
+- `8662660` — **P0, the seam.** `import assetlib` works inside Houdini
+  22.0.368, reads the library, and drags neither `runtime/` nor a second Qt in
+  with it. Invariant 2 paid against a real host rather than argued for.
+  `houdini/` is one package file to install; everything else is read out of the
+  repo.
+- `70ca304` — **Import to Houdini**, right-click, gated on a new `has_geo`
+  index column. The options dialog is in `ui/import_houdini.py`, deliberately
+  **not** in Houdini.
+- `9d14718` — **the builder.** 1 058 lines copied verbatim from
+  `Assets_manager_var01.py:400-1457`; five sites rewired; ~1 000 lines of
+  guessing left behind. Plus the **Python Panel**, which makes right-click →
+  Import build in-process.
+- `6e2dfff` — **batch import**, `ui/batch_add.py`. One row per subfolder,
+  multi-select, spread edits. Button beside *Add asset*, or Ctrl+Shift+N.
+- `strip_tokens` listed image formats only, so every Megascans folder imported
+  as `..._fbx`. Mesh and remaining image formats added.
+- Gotchas **13** and **14**; `architecture.md` invariants **13** and **14**.
+
+**Decided.** **Houdini 22+ only**, stated by Felix — which deletes the PySide2
+shim and makes the Python Panel possible. **The panel reads and builds, writing
+stays standalone**, because Houdini's interpreter has no xxhash and importing
+from there would write blake2b digests into an xxh3 library. Both in
+`docs/decisions.md`. The builder was **copied, not retyped** — transcribing a
+thousand lines by hand is how you lose a `setInput(1, …)` — and the ported code
+still speaks the original's shapes so the seam is the only new code. Geometry
+format ranking was left **deliberately arbitrary** rather than invented inside
+a bug fix.
+
+**Open.** The measurement is the thing worth keeping.
+
+- **B1 is an order of magnitude smaller than `ROADMAP.md` says.** Measured:
+  `Maya/assets` 1 438 files / **27.3 GB**; `VaultCache` 1 896 / 24.4 GB;
+  `Insect/Texture` 111 files but **32.3 GB** (~300 MB each); `megascantest`
+  552 / 2.4 GB; `3DHome/Scan` 43 / 0.6 GB. **~4 040 files, ~87 GB, and on the
+  order of 150–400 assets — not 4 000.** The "4 000 assets, hours of runtime"
+  framing counted FILES. `H:/3D` overall is 509.7 GB, but ~420 GB of that is
+  scenes and caches, not assets. **`J:/3d` does not exist**, so the
+  FreeFileSync-mirror argument for dedup (`B3`) is stale.
+- Consequence not yet acted on: the scan → review → apply → verify **migration
+  engine may not be worth building**. Its append-only journal solves an
+  interruption problem that 87 GB of same-drive renames does not have. The
+  batch importer was built instead, and is the bet that B1 is bounded by
+  attention rather than throughput.
+- **Nothing has been committed through the batch window.** The scan path is
+  proven on all 17 Plants folders (0 rejected, 0 conflicts, 7.2 GB); the import
+  path has never run.
+- **The Houdini builder has created nodes** — Felix confirmed — but only for one
+  asset, and only after two bugs were fixed: "all variants" built the first mesh
+  only, and `build_karma_component` returned `None` so `len(nodes)` blew up
+  after a successful build.
+- Plants analyse as type **`scan`**, because `vegetation.primary_ext` is
+  SpeedTree-only. The one asset already imported is `vegetation/grass`. **Pick
+  one before importing the other sixteen** — mixed types across one vendor
+  folder is annoying to unpick later. Note `vegetation` has no `plant`
+  category; it has `tree shrub grass flower moss misc`.
+- Three app bugs from the previous stretch are still open in `ROADMAP.md`, and
+  `strip_before_match` in `texture_slots.json` is still dead config needing
+  `/retire`.
+
+**Next.** Import the 17 Plants through the batch window — it is the only part
+of the chain that has never run, and it fills the library the adapter is
+waiting on.
+
+---
+
 ## 2026-09-12 — four dimensions the planner did not have
 
 **Done.** Five commits on `fix/scaffold-shakeout`, unmerged.

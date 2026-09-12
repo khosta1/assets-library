@@ -174,3 +174,44 @@ launched in another process and was migrating 57 assets while the check ran.
 only trustworthy when nothing else is writing. Neither is a reason to stop
 verifying — it is a reason to look at what else is running before believing it.
 
+---
+
+**15. A backslash escape written through a shell heredoc arrives as one
+character less** — 2026-09-12
+
+A two-backslash `\\d` typed into a script, passed through `<<'EOF'`, lands in
+the file as a one-backslash `\d`. A regex in JSON then fails to parse; and a
+newline escape inside a Python string literal arrives as an actual line break,
+so the file will not compile — `SyntaxError: unterminated string literal`.
+
+This entry was itself mangled by the trap on first writing, which is the
+clearest demonstration available that reading about it is not enough.
+
+It happened **three times in one evening** - `texture_slots.json`,
+`library.json`, and a `setToolTip` in `ui/app.py` - each time looking like a
+different bug, because the error surfaces at the reader rather than the writer
+and the line number points at the innocent file.
+
+**Rule:** do not write escape sequences through a heredoc. Use the editor tool
+for any line containing a backslash, and after writing a config that holds a
+regex, `json.load` it and `re.compile` every pattern before doing anything
+else. Gotcha 13 is the JSON half of this; this is the general case.
+
+---
+
+**16. The click that starts an edit destroys the selection it was meant for**
+— 2026-09-12
+
+A `QTableView` with `ExtendedSelection` and `AllEditTriggers`: select twenty
+rows, click a cell to change it, and the plain click collapses the selection to
+that one row **before** the editor opens. Any code that then reads
+`selectedRows()` to spread the edit sees one row and the change looks like it
+silently failed.
+
+Two halves to the fix: edit triggers that do not fire on a bare click
+(`SelectedClicked | DoubleClicked | EditKeyPressed`), and remembering the last
+**multi-row** selection so the spread has something to aim at. Restore the
+selection afterwards, or the user cannot see that the edit applied to all of
+them. Only multi-row selections are worth remembering - a single row is not a
+batch and must not resurrect an older one.
+

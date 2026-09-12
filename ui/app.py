@@ -13,7 +13,7 @@ import os
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QSize, QTimer
+from PySide6.QtCore import QItemSelectionModel, Qt, QSize, QTimer
 from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel, QLineEdit,
                                QListView, QMainWindow, QMenu, QMessageBox,
@@ -29,7 +29,7 @@ from assetlib.verify import verify
 from . import theme
 from . import thumbcache
 
-from .gridmodel import ROW_ROLE, AssetGridModel, _human
+from .gridmodel import ROW_ROLE, AssetGridModel, TileDelegate, _human, tile_sizes
 
 TYPE_ROLE = Qt.UserRole + 10
 CAT_ROLE = Qt.UserRole + 11
@@ -90,7 +90,14 @@ class MainWindow(QMainWindow):
         self.view.setMovement(QListView.Static)
         self.view.setWordWrap(True)
         self.view.setSpacing(8)
-        self.view.setSelectionMode(QListView.SingleSelection)
+        self.view.setItemDelegate(TileDelegate(self.view, self))
+        self.view.setMouseTracking(True)   # so the delegate sees MouseOver
+        # Extended so a whole shelf of assets can go to Houdini in one pass.
+        # Everything else - Contents, Edit, Delete, Open folder - still acts on
+        # the CURRENT asset only, and each of those names the asset it is about
+        # to touch, so a wide selection cannot make one of them do more than it
+        # says.
+        self.view.setSelectionMode(QListView.ExtendedSelection)
         self.view.doubleClicked.connect(lambda *_: self._view_asset())
         self.view.selectionModel().selectionChanged.connect(self._update_detail)
         self.view.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -427,29 +434,57 @@ class MainWindow(QMainWindow):
         Lazily imported like Add and Edit, for the same reason: a fault on this
         path must not be able to stop the browser from opening.
         """
-        path = self._selected_dir()
-        if path is None:
-            return
-
         from assetlib.model import Asset
 
         from .import_houdini import HoudiniImportDialog, send
 
-        try:
-            asset = Asset.read(path)
-        except Exception as exc:                        # noqa: BLE001
-            QMessageBox.critical(self, "Cannot read this asset", str(exc))
+        # Only the ones that hold a mesh. A selection dragged across a shelf
+        # picks up HDRIs and texture sets, and silently skipping them is kinder
+        # than refusing the whole thing.
+        rows = [r for r in self._selected_rows() if self._has_geometry(r)]
+        if not rows:
             return
 
-        dialog = HoudiniImportDialog(asset, self.cfg, self)
+        assets = []
+        for row in rows:
+            path = self.cfg.library / row["path"]
+            if not path.exists():
+                continue
+            try:
+                assets.append((Asset.read(path), path))
+            except Exception as exc:                    # noqa: BLE001
+                QMessageBox.critical(self, "Cannot read this asset",
+                                     f"{row['name']}: {exc}")
+                return
+        if not assets:
+            return
+
+        # The dialog is built from the FIRST asset and its answers are applied
+        # to all of them. That is a real hazard when the selection is mixed -
+        # see the note in ROADMAP.md - so the dialog says so rather than
+        # pretending the options describe every asset.
+        dialog = HoudiniImportDialog(assets[0][0], self.cfg, self,
+                                     count=len(assets))
         if dialog.exec() != QDialog.Accepted:
             return
-        try:
-            message = send(asset, path, self.cfg, dialog.options())
-        except Exception as exc:                        # noqa: BLE001
-            QMessageBox.critical(self, "Import to Houdini failed", str(exc))
-            return
-        self.statusBar().showMessage(message)
+
+        opts = dialog.options()
+        built, failed = 0, []
+        for asset, path in assets:
+            try:
+                send(asset, path, self.cfg, opts)
+                built += 1
+            except Exception as exc:                    # noqa: BLE001
+                failed.append(f"{asset.name}: {exc}")
+
+        if failed:
+            QMessageBox.warning(
+                self, "Some assets did not build",
+                f"{built} built, {len(failed)} failed.\n\n"
+                + "\n".join(failed[:10]))
+        self.statusBar().showMessage(
+            f"sent {built} asset(s) to Houdini"
+            + (f"   ·   {len(failed)} failed" if failed else ""))
 
     def _context_menu(self, point) -> None:
         """Right-click on a tile.
@@ -460,7 +495,19 @@ class MainWindow(QMainWindow):
         """
         index = self.view.indexAt(point)
         if index.isValid():
-            self.view.setCurrentIndex(index)
+            sm = self.view.selectionModel()
+            if sm.isSelected(index):
+                # Right-clicking INSIDE a selection must not collapse it. The
+                # plain setCurrentIndex that used to be here cleared the
+                # selection and selected the one tile under the cursor, so
+                # "Import 12 to Houdini" turned into one asset between the
+                # click and the menu opening. NoUpdate moves the current index
+                # without touching what is selected.
+                sm.setCurrentIndex(index, QItemSelectionModel.NoUpdate)
+            else:
+                # Outside it, the click means "this one instead", which is what
+                # replacing the selection is for.
+                self.view.setCurrentIndex(index)
         row = self._current_row()
         if row is None:
             return
@@ -468,9 +515,12 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         menu.addAction("Contents…", self._view_asset)
         menu.addAction("Edit…", self._edit_asset)
-        if self._has_geometry(row):
+        with_geo = [r for r in self._selected_rows() if self._has_geometry(r)]
+        if with_geo:
             menu.addSeparator()
-            menu.addAction("Import to Houdini…", self._import_houdini)
+            label = ("Import to Houdini…" if len(with_geo) == 1
+                     else f"Import {len(with_geo)} to Houdini…")
+            menu.addAction(label, self._import_houdini)
         menu.addSeparator()
         menu.addAction("Open folder", self._open_folder)
         menu.addSeparator()
@@ -557,8 +607,26 @@ class MainWindow(QMainWindow):
     # ---------------------------------------------------------------- detail
 
     def _current_row(self):
+        index = self.view.currentIndex()
+        if index.isValid():
+            return index.data(ROW_ROLE)
         sel = self.view.selectionModel().selectedIndexes()
         return sel[0].data(ROW_ROLE) if sel else None
+
+    def _selected_rows(self) -> list:
+        """Every selected asset, in grid order. The current one first.
+
+        The current index leads because it is the one the options dialog is
+        built from, and a dialog describing the third asset while the first is
+        under the cursor would be its own kind of wrong.
+        """
+        rows = [i.data(ROW_ROLE) for i in self.view.selectionModel().selectedIndexes()]
+        rows = [r for r in rows if r]
+        current = self._current_row()
+        if current and current in rows:
+            rows.remove(current)
+            rows.insert(0, current)
+        return rows
 
     def _update_detail(self, *_) -> None:
         row = self._current_row()
@@ -595,9 +663,13 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ zoom
 
     def _apply_zoom(self) -> None:
+        # Sizes come from gridmodel, where the tile is drawn - two places
+        # deciding the same geometry is how the text block ended up too short
+        # for the names it had to hold.
         px = ZOOM_SIZES[self.zoom.value()]
-        self.view.setIconSize(QSize(px, px))
-        self.view.setGridSize(QSize(px + 26, px + 46))
+        icon, grid = tile_sizes(px)
+        self.view.setIconSize(icon)
+        self.view.setGridSize(grid)
 
     def closeEvent(self, event):
         self.conn.close()

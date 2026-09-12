@@ -52,10 +52,13 @@ class HoudiniImportDialog(QDialog):
     instead of leaving them in the filenames.
     """
 
-    def __init__(self, asset: Asset, cfg, parent=None):
+    def __init__(self, asset: Asset, cfg, parent=None, count: int = 1):
         super().__init__(parent)
         self.asset = asset
-        self.setWindowTitle(f"Import to Houdini  -  {asset.name}")
+        self.count = count
+        self.setWindowTitle(
+            f"Import to Houdini  -  {asset.name}" if count == 1
+            else f"Import {count} assets to Houdini")
         self.setMinimumWidth(430)
         self.setModal(True)
 
@@ -65,6 +68,25 @@ class HoudiniImportDialog(QDialog):
 
         head = QLabel(f"<b>{asset.name}</b>  -  {asset.type} / {asset.category}")
         lay.addWidget(head)
+
+        if count > 1:
+            # Said out loud, because it is not obvious and it is the one way
+            # this window can do something the user did not intend. The options
+            # below describe ONE asset - opacity is offered because that asset
+            # has an opacity map, 4k is offered because that asset has 4k - and
+            # every other selected asset gets the same answers whether or not
+            # they mean anything to it. The builder degrades rather than fails
+            # (a missing size falls back to the biggest, a missing variant to
+            # the primary), so nothing breaks; it just may not be what was
+            # pictured. See ROADMAP.md.
+            warn = QLabel(
+                f"These options are read from <b>{asset.name}</b> and applied to "
+                f"all <b>{count}</b> selected assets.<br>"
+                "Where an option does not apply, that asset falls back to its "
+                "own default rather than failing.")
+            warn.setWordWrap(True)
+            warn.setStyleSheet("padding:6px 0;")
+            lay.addWidget(warn)
 
         # --- opacity -------------------------------------------------------
         lay.addWidget(_heading("Opacity"))
@@ -77,8 +99,12 @@ class HoudiniImportDialog(QDialog):
             lay.addWidget(rb)
         self.op_stencil.setChecked(True)
 
-        has_opacity = "opacity" in (asset.textures or {})
-        if not has_opacity:
+        # Greying out only makes sense for ONE asset. Across a selection, the
+        # asset the dialog was read from may be the only one without an opacity
+        # map, and disabling the choice would deny it to the other nineteen.
+        # The builder already ignores an opacity mode for an asset that has no
+        # opacity map, so offering it costs nothing.
+        if count == 1 and "opacity" not in (asset.textures or {}):
             # Say so rather than offering a choice that will do nothing. The old
             # tool let you pick stencil on an asset with no opacity map and then
             # silently built nothing, which reads as a broken import.
@@ -92,7 +118,7 @@ class HoudiniImportDialog(QDialog):
         # --- displacement ---------------------------------------------------
         lay.addWidget(_heading("Displacement"))
         self.disp = QCheckBox("Add mtlxdisplacement node")
-        self.disp.setEnabled("disp" in (asset.textures or {}))
+        self.disp.setEnabled(count > 1 or "disp" in (asset.textures or {}))
         if not self.disp.isEnabled():
             self.disp.setText("Add mtlxdisplacement node   (no disp map in this asset)")
         lay.addWidget(self.disp)

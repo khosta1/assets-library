@@ -29,6 +29,10 @@ assets and verifies clean apart from three orphan warnings (see `ROADMAP.md`).
   from the measured pixel width (`16k`), re-emitted as `_<res>` before the
   UDIM tile; biggest promoted into `textures[slot]` by
   `commit._promote_best_resolution()`. `res:4k` asks *has this size*.
+- **Batch import** — `ui/batch_add.py`, button beside *Add asset* or
+  Ctrl+Shift+N. One row per subfolder, shift-select, and a change to Type,
+  Category or the checkbox spreads across the selection. Name never
+  spreads. `analyse()` per asset, `commit()` still the only writer.
 - **Import to Houdini** — right-click an asset. Options dialog lives in the
   library (`ui/import_houdini.py`), never in Houdini: opacity mode,
   displacement, resolution, variant, USD variant set, localize to `$HIP`.

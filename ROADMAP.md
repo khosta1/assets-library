@@ -3,15 +3,13 @@
 ## Everything asked for — the whole list
 
 **Consuming the library**
-- `A1` Houdini adapter — nearly trivial now the layout is normalised and LODs
-  are recorded per level; a detail switch can be built without parsing names
+- `A1` Houdini adapter — **done 2026-09-12**, `houdini/`
 - `A2` USD + `.tx` / `.rat` generation into `derived/`
 - `A3` Maya, Blender, Unreal adapters
 
 **Filling the library**
-- `B1` bulk migration of `H:/3D/Maya/assets` — scan → review → apply → verify,
-  with an append-only journal so it survives the hours it will take, preferring
-  same-drive renames over copies
+- `B1` bulk migration — **batch importer built 2026-09-12**, nothing imported
+  through it yet. Scope measured and much smaller than assumed; see Phase 4
 - `B2` zip auto-extraction on import
 - `B3` dedup in the UI — `index.find_by_hash()` is a stub; the hashes are
   already in every `asset.json`
@@ -31,13 +29,14 @@ be copied to a USB stick and still work.
 > **The target slice: drop a vendor zip in, and open the asset in Houdini from
 > a node that never had to guess what any file was.**
 
-Everything built so far is the first half of that sentence. `A1` is the second.
+Both halves now exist. What is missing is the middle: the library holds 58
+assets and the sources hold a few hundred. `B1` is the gap.
 
 ---
 
 ## Build order
 
-*Updated 2026-09-11.*
+*Updated 2026-09-12.*
 
 ### Phase 1 — Import, edit, browse — *done 2026-08-21*
 
@@ -46,28 +45,66 @@ deleting, the contents viewer, HDR/EXR thumbnails, the bounded preview cache,
 FTS search, verify (including deep), the bundled runtime, portability tested
 from a different path.
 
-### Phase 2 — `A1` Houdini adapter — *next, days*
+### Phase 2 — `A1` Houdini adapter — **done 2026-09-12**
 
 The payoff of the whole design, and the first thing that consumes the library
 rather than filling it. Until something reads the normalised layout, "zero
-heuristics downstream" is a claim, not a result.
+heuristics downstream" is a claim, not a result. It now reads it.
+
+`houdini/` — one package file to install. Seam test, browser launcher, Python
+Panel, and `build.py`: 1 058 lines of Karma/MaterialX/Solaris node building
+ported from the old shelf tool, with roughly a thousand lines of filename
+guessing left behind because `asset.json` already answers it. Right-click an
+asset → *Import to Houdini*. Confirmed building nodes.
+
+Still open on it: no geometry format ranking (see *Open bugs*), `derived/`
+empty so Karma reads `.png` rather than `.rat`, and only Karma is wired —
+Arnold and Redshift would need a second mapping table, which is config.
 
 ### Phase 3 — `A2` derived formats — *~1 week*
 
 `.tx` / `.rat` / `.usda` into `derived/`, regenerable and never backed up.
 Blocked on nothing; more useful once `A1` exists to consume it.
 
-### Phase 4 — `B1` bulk migration — *the long one, hours of runtime*
+### Phase 4 — `B1` bulk migration — *smaller than this document claimed*
 
-Scan → review → apply → verify, resumable through an append-only journal.
-Prefer same-drive renames over copies. `B3` dedup matters here, because `J:/3d`
-looks like a FreeFileSync mirror of `H:/3D` and much of the data exists twice.
+**Measured 2026-09-12**, because the estimate was load-bearing and wrong:
+
+| source | files | size |
+|---|---|---|
+| `H:/3D/Maya/assets` | 1 438 | 27.3 GB |
+| `G:/…/VaultCache` | 1 896 | 24.4 GB |
+| `H:/3D/Insect/Texture` | 111 | **32.3 GB** |
+| `H:/3D/HOUDINI/megascantest` | 552 | 2.4 GB |
+| `H:/3DHome/Scan/Textures` | 43 | 0.6 GB |
+| **total** | **~4 040** | **~87 GB** |
+
+On the order of **150–400 assets**, not 4 000 — that number was the FILE count.
+`H:/3D` is 509.7 GB in total, but ~420 GB of it is scenes and caches rather
+than assets. **`J:/3d` does not exist**, so the FreeFileSync-mirror argument for
+`B3` dedup is stale; check the drive before acting on it.
+
+Consequence: the scan → review → apply → verify engine with an append-only
+journal was specified to survive *hours of runtime*. At 87 GB, with same-drive
+renames, it solves a problem the measurement removed. **B1 is bounded by
+attention, not throughput** — 300 assets × three declared fields is 900
+decisions, and no engine removes those, because the central decision says a
+human declares them.
+
+So the tool built instead is a **batch importer** (`ui/batch_add.py`,
+2026-09-12): one row per subfolder, multi-select, spread edits, `analyse()` per
+asset and `commit()` still the only writer. What is batched is the confirming,
+not the deciding.
+
+Order: `VaultCache` first — uniformly named, already the source every new
+dimension was built against, and every asset in it exercises resolutions,
+variants and LODs.
 
 ### What this order deliberately does not do
 
 It does not add more importers before something reads what has been imported.
-Eight assets are enough to prove the adapter; 4 000 are not more proof, they
-are more risk.
+That held until 2026-09-12, when `A1` landed; filling the library is now the
+thing in front rather than the thing being deferred.
 
 ---
 
@@ -91,6 +128,17 @@ are more risk.
   order is never read, so which of `.abc/.fbx/.obj/.usd` becomes `primary` is
   whichever the filesystem yields first. `_promote_lod_geo` is deliberately
   first-bound until this is decided. Probably `.usd` first for `model`.
+
+- **One options dialog decides for a whole selection.** Multi-select in the
+  grid and *Import to Houdini* reads the options from the **first** asset and
+  applies them to all of them. Harmless when the selection is uniform - the
+  point of the feature - and wrong in a mixed one: a resolution or variant the
+  others do not have, an opacity mode meaningless to half of them. It degrades
+  rather than fails (a missing size falls back to the biggest, a missing variant
+  to the primary) and the dialog says out loud where the options came from, but
+  it can still build something other than what was pictured. **Marked, not
+  solved** (2026-09-12). The real fix is per-asset resolution of the options at
+  build time, or refusing a selection that spans types.
 
 **Scaffold, found 2026-09-11, still open:**
 

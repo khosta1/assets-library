@@ -29,10 +29,17 @@ guessing happens once, in `slots.py`, and never again.
 ## 2. The layers, and the arrow between them
 
 ```
-ui/          PySide6 windows          imports assetlib
-assetlib/    pure core                imports neither Qt nor hou
-config/      JSON                     data, read by assetlib
+ui/           PySide6 windows       imports assetlib
+houdini/      hou + Solaris         imports assetlib
+assetlib/     pure core             imports neither Qt nor hou
+config/       JSON                  data, read by assetlib
 ```
+
+`houdini/assetlib_hou` joined on **2026-09-12** and points the same arrow from a
+second direction. It was the first real test of the rule rather than an argument
+for it: `import assetlib` inside Houdini 22.0.368 works, reads the library, and
+pulls in neither Qt nor the bundled `runtime/`. Every adapter after it — Maya,
+Blender, Unreal — arrives the same way and needs no change to the core.
 
 **RULE.** `assetlib` imports no Qt and no `hou`. The arrow direction is the
 whole discipline: `ui/` depends on `assetlib`, never the reverse. Breaking it
@@ -216,21 +223,57 @@ Everything above, as the list to check a change against. `verify.py` enforces
 
 ---
 
+## 7b. The adapter join
+
+Added **2026-09-12**.
+
+> **The library decides nothing about a DCC; a DCC guesses nothing about the
+> library.**
+
+`ui/import_houdini.py` owns every choice — opacity mode, displacement,
+resolution, variant, localize — and `houdini/.../build.py` is a function that
+takes an asset and a dict of those choices and makes nodes. No dialogs on the
+Houdini side, no `hou` on the library side.
+
+The builder was ported from a working shelf tool whose other half walked the
+folder and re-derived what every filename meant, on every run. That half was
+deleted rather than moved, which is the payoff stated in §1 finally collected:
+1 058 lines of Karma/MaterialX/Solaris knowledge kept, ~1 000 lines of guessing
+dropped because `asset.json` already holds the answers.
+
+Two ways in, one entry point. Inside a Python Panel the window has `hou` and
+calls the builder directly; standalone it writes `.assetlib/request.json` and a
+shelf button reads it. Disk is what both sides agree on, the same rule the rest
+of the project runs on.
+
+**RULE.** The panel READS and BUILDS. Add, Edit and deep verify stay in the
+standalone app, because Houdini's interpreter has no xxhash and importing from
+there would write a second digest algorithm into the library.
+
+---
+
 ## 8. Where the seams are
 
-As of **2026-09-11**.
+As of **2026-09-12**.
 
-- **No DCC adapter yet.** The layout is normalised and LODs are recorded per
-  level, so the Houdini adapter is nearly trivial — a detail switch can be
-  built without parsing names. Nothing consumes the library yet, which means
-  the payoff of the owned hierarchy is still theoretical.
+- **The Houdini adapter exists** (2026-09-12, §7b). The payoff of the owned
+  hierarchy is no longer theoretical: a Karma/MaterialX network is built from
+  bindings, and the thousand lines of filename guessing its predecessor needed
+  were deleted rather than ported. Karma only — Arnold and Redshift want a
+  second `mtlx_input` mapping, which is config. Maya, Blender and Unreal are
+  `A3` and arrive the same way.
 - **`derived/` is empty.** USD and `.tx`/`.rat` generation is designed, not
   built. Vendor `.mtlx`/`.usdc` are discarded at import because they reference
   the original filenames; ours are not yet generated in their place.
 - **Dedup is a stub.** `index.find_by_hash()` exists and returns nothing. The
   hashes are already in `asset.json`, and `J:/3d` appears to be a FreeFileSync
   mirror of `H:/3D`, so much of the source data exists twice.
-- **The bulk migration has not run.** `H:/3D/Maya/assets` is still the source
-  of truth for most assets, and the library holds 8.
+- **The bulk migration has not run.** The library holds 58; the sources hold a
+  few hundred. A batch importer exists (`ui/batch_add.py`) and nothing has been
+  imported through it. Measured 2026-09-12: ~4 040 files and ~87 GB across five
+  roots — an order of magnitude less than `ROADMAP.md` assumed, because the
+  old figure counted files, not assets. **This is now the widest seam**: the
+  adapter reaches only what has been imported, and that is the whole cost of
+  owning the hierarchy.
 - **Three type signatures are unverified**, marked `VERIFY` in `types.json`:
   Gaea `.tor` (2.x) vs `.terrain` (1.x), ZBrush `.zbp`, Marvelous `.zpac`.
