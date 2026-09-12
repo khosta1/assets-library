@@ -110,13 +110,24 @@ def bind(asset: Asset, dest: str, slot=None, lod=None, udim=None, res=None,
             str(lod), {"geo": None, "representations": [], "textures": {}})
         if slot:
             level["textures"][slot] = dest
-        elif dest.startswith("geo/"):
+        elif dest.startswith("geo/") or "/" not in dest:
             # Appended, never assigned. This was `level["geo"] = dest`, and a
             # level shipping both .fbx and .obj bound one and silently
             # overwrote the other: two files on disk, one with nothing pointing
             # at it, and no conflict raised because the two destinations were
             # different. Which of them is THE geometry is settled afterwards by
             # _promote_lod_geo, like every other pointer that has to choose.
+            #
+            # `"/" not in dest` is the package-root case, and it was missing
+            # here while the non-LOD path below has always had it. A file sent
+            # to "main file" gets slot=None and, on a type that is not
+            # mesh_plus_textures, no folder either - so a root-level file
+            # carrying a _lodN token matched neither condition, bound nothing,
+            # and returned. The level was still created by setdefault above and
+            # by _record_lods, which reads action.lod without asking whether
+            # anything binds it. Result on disk: lods {1,2} with empty bodies,
+            # two .jpg files at the package root pointed at by nothing, and
+            # verify reporting them as orphans. See ROADMAP, found 2026-09-12.
             level.setdefault("representations", []).append(
                 {"file": dest, "format": Path(dest).suffix.lstrip("."),
                  "role": "", "variant": variant}
@@ -232,7 +243,18 @@ def _promote_lod_geo(asset: Asset) -> None:
         for entry in entries[1:]:
             entry["role"] = ("variant" if entry.get("variant") != head.get("variant")
                              else "exchange")
-        level["geo"] = head["file"]
+
+        # `geo` names GEOMETRY, and only a file under geo/ is that. This used
+        # to be `level["geo"] = head["file"]` unconditionally, which was safe
+        # only while representations could hold nothing else. Since a root-level
+        # primary now binds here too, an unguarded assignment would declare a
+        # .jpg to be the level's mesh - and `geo` is exactly what
+        # index._has_geometry() reads, so the asset would offer *Import to
+        # Houdini* and hand the builder an image to load as geometry.
+        mesh = next((e["file"] for e in entries
+                     if (e.get("file") or "").startswith("geo/")), None)
+        if mesh:
+            level["geo"] = mesh
 
 
 def _promote_best_resolution(asset: Asset) -> None:

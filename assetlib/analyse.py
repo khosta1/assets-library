@@ -255,6 +255,22 @@ SKIP, BONUS, PREVIEW_TARGET, PRIMARY = "skip", "bonus", "preview", "primary"
 GEOMETRY = "geometry"
 
 
+def derived_exts(tdef: dict, cfg) -> set:
+    """What counts as a regenerable bake for this type: the global set plus its own.
+
+    Global, like `geometry_ext`, because the two answer the same shape of
+    question: a `.rat` is a mip-mapped bake wherever it is found, and which
+    asset it happens to sit beside says nothing about that. Declared per type,
+    only `texture` ever declared it - so a `.rat` beside an HDRI or a Megascans
+    mesh went to `extra/`, which is the part of the package that is KEPT, while
+    `derived/` is defined as deletable. Exactly backwards, and silent.
+
+    Unioned rather than overridden so a type can still add a format nothing
+    else bakes, without having to restate the common ones.
+    """
+    return cfg.derived_ext | {e.lower() for e in (tdef.get("derived_ext") or [])}
+
+
 def bonus_action(plan: ImportPlan, path: Path, size: int, why: str = "",
                  udim: str | None = None) -> FileAction:
     reason = BONUS_REASON if not why else why + " - " + BONUS_REASON
@@ -674,6 +690,7 @@ def _plan_texture_set(plan: ImportPlan, files, cfg, matcher: SlotMatcher) -> Non
     discard = {
         e.lower() for e in cfg.slots_cfg.get("discard_on_import", {}).get("extensions", [])
     }
+    derived = derived_exts(cfg.type_by_id[plan.type_id], cfg)
 
     candidates: dict = {}
     previews: list = []
@@ -690,6 +707,19 @@ def _plan_texture_set(plan: ImportPlan, files, cfg, matcher: SlotMatcher) -> Non
                            reason="vendor-authored, references the original filenames - regenerated into derived/")
             )
             continue
+
+        # Baked textures, same rule and same reason as the generic planner.
+        # This branch was missing here entirely, so a .rat beside a texture set
+        # fell through to `ext not in IMAGE_EXTS` and became a bonus file in
+        # extra/ - even though `texture` is the ONE type that declared
+        # derived_ext. The declaration was real and nothing read it.
+        if ext in derived:
+            plan.actions.append(
+                FileAction(path, "keep", dest=f"derived/{path.name}", size=size,
+                           reason="baked, regenerable - stored in derived/")
+            )
+            continue
+
         # A texture set is not supposed to contain geometry - that is what
         # makes something a model - but this planner also runs when the TYPE
         # was declared by hand, and a hand-declared texture asset holding an
@@ -759,7 +789,7 @@ def _plan_generic(plan: ImportPlan, files, cfg, matcher: SlotMatcher, strategy: 
     """
     tdef = cfg.type_by_id[plan.type_id]
     primary = {e.lower() for e in tdef.get("primary_ext", [])}
-    derived = {e.lower() for e in tdef.get("derived_ext", [])}
+    derived = derived_exts(tdef, cfg)
     seen_primary: dict = {}
     candidates: dict = {}
     previews: list = []

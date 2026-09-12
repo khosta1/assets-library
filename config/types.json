@@ -23,6 +23,9 @@
   "geometry_ext": [".obj", ".fbx", ".abc", ".usd", ".usda", ".usdc", ".usdz", ".ply", ".stl", ".gltf", ".glb", ".blend", ".ma", ".mb", ".3ds", ".dae", ".lwo", ".c4d", ".max"],
   "_geometry_ext": "What ROUTING treats as geometry: any file with one of these extensions lands in geo/, whatever the asset's type. Separate from each type's primary_ext, which answers a DIFFERENT question - what makes this type detectable. Conflating the two is what sent every .fbx in a vegetation asset to extra/: vegetation's primary_ext is .spm/.st/.st9/.srt, the SpeedTree formats, so no mesh file was ever recognised. Also separate from mesh_extensions() in analyse.py, which excludes USD sidecars so a 2.5KB .usdc cannot make a texture set look like a model - that is detection, this is routing, and they must not be merged back together.",
 
+  "derived_ext": [".tx", ".rat", ".tex", ".b2r"],
+  "_derived_ext": "What ROUTING treats as a regenerable bake: any file with one of these extensions lands in derived/, whatever the asset's type. Global for the same reason geometry_ext is - a .rat is a mip-mapped bake of a texture wherever it is found, and whether it sits beside an HDRI, a scan or a texture set says nothing about that. It used to be declared per type and only 'texture' declared it, so a .rat beside an HDRI or a Megascans mesh landed in extra/ - the part of the package that is KEPT and backed up - while derived/ is defined as deletable. One .rat was already in the library that way (tcom_vestrahorn_hdri_sphere_tone.jpg.rat). A type may still add its own in its own derived_ext; the two are unioned, never replaced. .tex is RenderMan's, .b2r is Redshift's.",
+
   "types": [
     {
       "id": "texture",
@@ -31,7 +34,6 @@
       "ingest": "texture_set",
       "preview": "image_first",
       "primary_ext": [".png", ".jpg", ".jpeg", ".tif", ".tiff", ".tga", ".exr", ".bmp", ".webp", ".psd"],
-      "derived_ext": [".tx", ".rat"],
       "fields": {
         "resolution": "int",
         "udim": "bool",

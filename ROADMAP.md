@@ -150,18 +150,31 @@ closed by the J: run):
 
 **App, found 2026-09-12 by the new orphan check in `verify`:**
 
-- **A texture set with LOD-tagged textures binds none of them.**
-  `texture/decal/smudgeslarge001_overlay_var1_6k` has `lods={1,2}` and **zero**
-  entries in `textures`; `_lod1.jpg` and `_lod2.jpg` sit on disk pointed at by
-  nothing. Diagnosed, not fixed. Likely `_emit_slot_actions` recording a level
-  without binding its maps.
-- **`.rat`/`.tx` beside a mesh or an HDRI land in `extra/`, not `derived/`.**
-  `derived_ext` is `['.tx','.rat']` on the `texture` type and **null** on
-  `model`, `scan`, `vegetation`, `hdri`. So regenerable bakes sit in the part
-  of the package that is meant to be kept. One `.rat` is in the library now.
-  Worth deciding first whether a vendor bake should be trusted at all — it was
+- ~~**A texture set with LOD-tagged textures binds none of them.**~~ **Fixed
+  2026-09-13**, and it was not `_emit_slot_actions`. `commit.bind()`'s LOD
+  branch handled `slot` and `geo/` and returned; the non-LOD branch below has
+  always had a third case, `"/" not in dest`, the package root. A file sent to
+  *main file* gets `slot=None` and, on a type that is not
+  `mesh_plus_textures`, no folder either — so a root-level file carrying
+  `_lodN` matched neither condition and bound nothing, while `_record_lods`
+  recorded the level anyway. One missing condition. `_promote_lod_geo` needed
+  guarding in the same change, or the newly-bound `.jpg` would have become the
+  level's `geo` and offered itself to Houdini as a mesh.
+  **Still on disk:** `texture/decal/smudgeslarge001_overlay_var1_6k` is the one
+  damaged package (all 75 scanned) and needs re-importing.
+- ~~**`.rat`/`.tx` beside a mesh or an HDRI land in `extra/`, not
+  `derived/`.**~~ **Fixed 2026-09-13**, and wider than reported: `texture` was
+  the only type declaring `derived_ext`, and `_plan_texture_set` never read it
+  — so even a texture set's `.rat` went to `extra/`. `derived_ext` is now
+  **global in `types.json`**, beside `geometry_ext` and for the same reason: a
+  `.rat` is a bake wherever it is found, and which asset it sits beside says
+  nothing about that. `analyse.derived_exts()` unions the global with any a
+  type adds. `.tex` (RenderMan) and `.b2r` (Redshift) added.
+  **Still on disk:** `hdri/outdoor/tcom_vestrahorn_hdri_sphere_tone/` holds
+  `tcom_vestrahorn_hdri_sphere_tone.jpg.rat` at the package root.
+  **Not decided:** whether a *vendor* bake should be trusted at all — it was
   baked against the vendor's filenames, which is the argument that got vendor
-  `.mtlx`/`.usdc` discarded.
+  `.mtlx`/`.usdc` discarded. Ours are regenerated; theirs are kept for now.
 - **No format ranking for geometry.** `primary_ext` is a membership list whose
   order is never read, so which of `.abc/.fbx/.obj/.usd` becomes `primary` is
   whichever the filesystem yields first. `_promote_lod_geo` is deliberately
