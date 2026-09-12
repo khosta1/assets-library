@@ -24,6 +24,7 @@ between the layers, marks design rules **RULE**, and ends with the
 | `docs/machine.md` | paths, Houdini versions, disks — the only machine-specific file |
 | `docs/journal.md` | one dated entry per session |
 | `docs/sources.md` | vendor conventions and the formats they ship |
+| `docs/porting.md` | **how to run a bulk import** — `port.py`, the procedure, the traps |
 | `ROADMAP.md` | what is being built next, and the open bugs |
 
 ## The code

@@ -4,6 +4,62 @@ Newest first.
 
 ---
 
+## 2026-09-13 (last) — B1 starts, and stepping earns its keep
+
+Second entry today. The one below is the cloud library; this is the bulk
+migration that followed it.
+
+**Done.**
+
+- **36 assets imported** from `VaultCache/FabLibrary`. Library **75 → 111**,
+  43.75 GB. `scan` 27, `vegetation` 30 (was 19), and every one of the 36 has
+  its meshes, its slots and a preview.
+- **`port.py`** — a plan-driven CLI, `bad71a5`. Reverses the 2026-08-21 CLI
+  removal for this job only; scope and reasoning in `decisions.md` § Reversed.
+  Five subcommands; `set --skip` was added as a flag rather than a sixth.
+- **`docs/porting.md`** — the procedure, so the next bulk import does not
+  re-derive any of this.
+- **Four systematic bugs found and fixed**, all by stepping, none by reading
+  code: letter variants `VarA..VarK` (`cb68b3c`, ~90 meshes were being
+  rejected), billboard maps winning real slots (same), `gloss`+`roughness`
+  colliding on one destination (same — would have blocked every commit), and a
+  variant word inside the asset's own name (`a6553c1`, six assets).
+- Earlier the same day and feeding this: `.rat` routed to `derived/`, vendor
+  sidecars kept in `extra/`, the LOD-binding fix in `bind()`.
+
+**Decided.** Stepping over batching, on Felix's choice — one asset, one word,
+36 times. It cost an evening and found four bugs that would each have been
+multiplied by 36. He switched to a single pass at asset 12, after the fixes had
+landed, which is the right shape: step until the failure modes are known, then
+loop. The glTF bundle got **no rule** — one example is not a pattern, the folder
+was deleted, and `docs/porting.md` says to make a rule if a second appears.
+`Granite_Rock-68ea246b` skipped by hand, 699 MB of raw 8K; the skip lives in the
+declarations, not the plan, so a replan cannot resurrect it.
+
+**Open.**
+
+- **The 36 are only on `H:`.** The box is the master. They need the same SMB
+  push and re-index the original 75 got, and `/api/health` should then read
+  **111**. Not done.
+- **25 `verify` warnings are `.rat` files in `tex/`, written by Houdini**, not
+  by the importer — Karma auto-converts on first render and writes beside the
+  texture. `derived/` exists for exactly this and nothing tells Houdini so.
+  That is `A2`'s gap and it now has a reproducible symptom.
+- **2 warnings are the old `smudgeslarge001`**, still needing a re-import.
+- **8 usdz-only assets and `European_Black_Alder` were skipped**, not solved. A
+  `.usdz` hides its textures inside the zip; importing one gives geometry with
+  no bindings.
+- **`Tundra_Grass` shipped its payload twice** (loose + `_extracted`,
+  byte-identical). The planner deduped correctly — 45 kept, 45 rejected — but
+  it dedupes on `(ext, lod, variant)`, not on content, so it does not *know*
+  they were identical.
+
+**Next.** Push the 36 to the box and re-index, so master and cache agree again
+before anything else is imported. Everything after that is `B1` continuing:
+`H:/3D/Maya/assets`, `H:/3D/Insect/Texture`, the rest.
+
+---
+
 ## 2026-09-13 — the library leaves this machine
 
 The box becomes the master and this folder becomes a client. Built against

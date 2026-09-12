@@ -90,7 +90,27 @@ shortcut and icon, and `pythonw` launching with no console at all.
 `.tx` / `.rat` / `.usda` into `derived/`, regenerable and never backed up.
 Blocked on nothing; more useful once `A1` exists to consume it.
 
-### Phase 4 — `B1` bulk migration — *smaller than this document claimed*
+### Phase 4 — `B1` bulk migration — **started 2026-09-13, FabLibrary done**
+
+First real run: **36 assets** from `VaultCache/FabLibrary`, library **75 → 111**
+(43.75 GB). Driven by `port.py` one asset at a time; the procedure and the traps
+are in `docs/porting.md`, which is what the next run should follow instead of
+re-deriving them.
+
+It found four systematic bugs in the importer that no amount of reading would
+have — letter variants, billboard maps winning real slots, `gloss`/`roughness`
+colliding on one destination, and a variant word inside the asset's own name.
+That is the argument for stepping, and it is why `docs/porting.md` says to step
+until the failure modes are known and only then loop.
+
+**The 36 are only on `H:` and the box is the master** — they still need the SMB
+push and a re-index, after which `/api/health` should read 111.
+
+Left in this source: 8 usdz-only assets and one manifest-only, skipped rather
+than solved. Left overall: `H:/3D/Maya/assets`, `H:/3D/Insect/Texture`, and the
+rest of the measurement below.
+
+### The measurement
 
 **Measured 2026-09-12**, because the estimate was load-bearing and wrong:
 
