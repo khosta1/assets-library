@@ -1,0 +1,22 @@
+[Unit]
+Description=Rebuild the asset library catalogue
+Documentation=file:/opt/assetlib/server/README.md
+RequiresMountsFor=/srv/data2
+
+[Service]
+Type=oneshot
+User=felix
+Group=felix
+WorkingDirectory=/opt/assetlib
+EnvironmentFile=/etc/assetlib/api.env
+ExecStart=/opt/assetlib/venv/bin/python -m server.reindex
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/var/lib/assetlib
+UMask=0077
+
+# No [Install]: started by the timer, or by hand after an import. Enabling it
+# would run a full FUSE walk of the library at every boot.

@@ -215,3 +215,92 @@ selection afterwards, or the user cannot see that the edit applied to all of
 them. Only multi-row selections are worth remembering - a single row is not a
 batch and must not resurrect an older one.
 
+**It bit a second time the same evening, through a different door.** The grid's
+context-menu handler called `view.setCurrentIndex(index)` unconditionally, which
+clears the selection and selects the tile under the cursor - so *Import 12 to
+Houdini* became one asset between the right-click and the menu appearing.
+Right-clicking inside a selection now uses
+`selectionModel().setCurrentIndex(index, QItemSelectionModel.NoUpdate)`, which
+moves the current index without touching what is selected; outside it, replacing
+the selection is still what a click means.
+
+**Rule, generalised:** before acting on a selection, ask what the gesture that
+triggered the action did to that selection first. `setCurrentIndex`,
+`AllEditTriggers` and a plain left click all quietly collapse one, and each
+failure looks like the action silently doing nothing.
+
+---
+
+**17. robocopy copied nothing and complained about a drive nobody mentioned**
+— 2026-09-12
+
+Seeding the 75 packages onto the Rocky box over SMB. The command named `H:` and
+`Y:` and nothing else, and it died instantly with
+
+```
+ERREUR : Désolé... Paramètre non valide #3 : "E:/"
+```
+
+Exit code **16**. Zero bytes copied, and the `/LOG:` file was never even
+created — so the obvious next move, "read the log", had nothing to read.
+
+**Cause:** the Bash tool here is Git Bash, and MSYS rewrites any argument that
+starts with a single `/` into a Windows path before the program ever sees it.
+`/E` became `E:/`. So did every other switch: the one line robocopy *did* print
+showed `/R:1000000 /W:30`, its defaults, because `/R:2` and `/W:2` had been
+eaten the same way. The error names a drive letter that appears nowhere in the
+command, which is what makes it unrecognisable — `E:` is not a typo, it is
+`/E` after the shell got to it.
+
+**Fix:** call native Windows executables from the PowerShell tool, never from
+the Bash tool. The seed ran unchanged from PowerShell and finished at 112 MB/s.
+
+**The tell, when it happens again:** robocopy echoes an `Options :` line into
+its own log listing the switches it actually received. If that line does not
+match what was typed, the shell ate them — do not go looking at the command.
+
+**Rule:** in this repo the Bash tool is Git Bash, so a `/SWITCH` argument is not
+safe there. `robocopy`, `net`, `reg`, `xcopy`, `sc` and friends all take that
+form and all lose it. Bash for POSIX tools, PowerShell for Windows ones; the
+failure is silent in the sense that matters, because the program runs, reports
+a real error, and blames something that was never in the command.
+
+---
+
+**18. A folder that cannot be deleted, by an app that is not running**
+— 2026-09-13
+
+`J:\Assets_library` refused to be deleted or even renamed: *"Le processus ne
+peut pas accéder au fichier, car il est utilisé par un autre processus."* The
+window had been closed. Nothing was in the taskbar. Nothing was on screen.
+
+`pythonw.exe` was still running from `J:\Assets_library\runtime\`, twenty
+minutes after the window went away.
+
+**Cause:** network jobs on a `QThreadPool` with no way to interrupt them. Qt
+waits for running pool jobs before the process can exit, and a thumbnail fetch
+blocked on a sleeping server holds its thread for the full socket timeout —
+fifteen seconds, or a hundred and twenty for a file transfer. One tile
+scrolling past an unreachable box was enough.
+
+**What made it invisible rather than merely slow** is the *other* fix from the
+same day: `Asset Library.vbs` now launches `pythonw.exe` so no console can ever
+appear. With a console there would have been a black window sitting there
+saying "still here". Without one, the only symptom the user ever sees is a
+folder Explorer will not delete, and nothing anywhere points at the app.
+
+**Fix:** `ui/netpool.py` gained `stopping()` and `shutdown()`. `closeEvent`
+calls `shutdown()` first — before the databases, which close instantly — which
+sets the flag, `clear()`s the queue, and waits 1.5 s. Every long job polls
+`netpool.stopping()` between chunks. If the pool still has not drained, the
+window is already gone and continuing to wait is continuing to lie, so
+`os._exit(0)`: `sys.exit` unwinds, and the unwinding is exactly what blocks.
+Nothing is lost — the databases were just closed, `asset.json` is written at
+commit time, and a partial download is a `.part` that resumes.
+
+**Rule:** a blocking call on a thread pool is a process that will not exit. The
+timeout you chose for the network is also the time your app takes to close, and
+under a windowless interpreter that time is invisible. Anything that waits on
+another machine needs a stop flag it checks itself — nothing outside it can
+interrupt a socket read — and a hard exit as the backstop.
+

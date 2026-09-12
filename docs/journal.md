@@ -4,6 +4,145 @@ Newest first.
 
 ---
 
+## 2026-09-13 — the library leaves this machine
+
+The box becomes the master and this folder becomes a client. Built against
+`server/client-contract.md`, written by the server-panel session; `server/` is
+theirs and was not touched.
+
+**Done.**
+
+- **The seed ran.** `library/` → `\\192.168.1.13\data2\assets\library` over SMB:
+  **75 packages, 1 039 files, 38.296 GB at 112 MB/s**, 0 failed, 0 mismatched,
+  `derived/` excluded. The box reports 75 and `library_mounted: true`.
+- **Origin plumbing.** `config/library.json` gains `roots.cache`;
+  `config.py` gains `cache_root`, `root_for()`, `asset_path()`,
+  `root_containing()`. Ten call sites that said `cfg.library / row["path"]` now
+  go through one function. `index.py` gains an `origin` column, `upsert(origin=,
+  size=)`, and a `rebuild()` that walks both roots.
+- **Houdini seam carries the origin** — `import_houdini.write_request()` writes
+  it, `launch.py` resolves through `root_for()`, `build.py` localises via
+  `root_containing()`, `seam.py` reports the cache root.
+- **Catalogue tier.** `assetlib/remote.py` (stdlib `urllib`, no Qt),
+  `assetlib/catalog.py`, `index.search_union()` / `counts_union()`,
+  `ui/remote_libraries.py`. Shift+F5 syncs; ETag 304 honoured.
+- **Thumbnail tier.** `_RemoteThumbJob` + `ui/netpool.py`, cached at
+  `.assetlib/remote/thumbs/<uuid>.jpg`, per-host cooldown.
+- **File tier.** `assetlib/materialise.py` + `ui/import_remote.py`: manifest,
+  `.part` + `Range` resume, hash verify, into `_cache/` **keeping the uuid**.
+- **Cloud tiles** — blue ground + outline (`theme.cloud_fill/cloud_edge`),
+  `CLOUD_ROLE`, and a `☁ Cloud` toggle that hides them.
+- **First-run panel** (`ui/first_run.py`), **Create a new library…**
+  (`assetlib/deploy.py` + `ui/new_library.py`), **Desktop shortcut + icon**
+  (`assetlib/shortcut.py`, `ui/resources/asset_library.ico`).
+- **No console, ever** — `Asset Library.vbs` runs `pythonw.exe` directly;
+  `cmd.exe` is out of the chain. `app._install_logging()` redirects to
+  `launch.log` and installs an excepthook.
+- Gotchas **17** and **18**.
+
+**Decided.** `_cache/` is a **sibling** of `library/`, not inside `.assetlib/`
+— that folder means "delete it, pay a rebuild", this one means "pay a
+re-download of gigabytes". `library/` is **kept** and empties itself, so origin
+stays 3-way rather than 2-way. Verify **skips** `_cache/` — it is a copy the box
+already verified and every file is hash-checked at download. `cache` is
+deliberately **not** blue: a downloaded asset is here and costs nothing, and
+marking it would warn about the one case with nothing to warn about. Downloads
+are **one at a time**, because seeing the cost before paying it does not survive
+being applied to twelve assets. No `/api/ping` — the client never probes before
+a token exists, and weakening the server's fail-closed rule for it would buy
+nothing. **No frozen `.exe`**: it would break the Houdini seam, which needs an
+importable `assetlib/` on disk — recorded in `decisions.md`.
+
+**Open.**
+
+- **Nothing has been imported from the box.** Every asset on it is also here
+  with the same uuid, so `search_union` dedupes them all to `local` and **no
+  tile is blue**. Phases 2–4 compile and import; the file tier has never moved
+  a byte. The real test is the J: copy, where `library/` is empty and all 75
+  arrive as cloud.
+- **`J:\Assets_library` is locked** by `pythonw.exe` PID 29884 running the
+  pre-fix build. Kill it and delete the folder before re-copying.
+- **`run_ui.bat` was deleted** this session (not by the agent). The `.vbs`
+  comment pointing at it has been corrected to a literal command line;
+  `CLAUDE.md` still lists it under **Run**.
+- **`_cache/` has no size budget.** Asked and deferred: "no cache budget needed
+  for now". On a portable drive it grows until the disk is full.
+- **Remote thumbnails are never re-fetched.** Per the contract, uuid is the
+  cache key. An asset re-imported on the box keeps its old tile until
+  `.assetlib/remote/thumbs/` is cleared by hand.
+- **Nothing visual has been observed by the agent** — the blue tiles, the cloud
+  toggle, the first-run panel, the new-library dialog and the import dialog are
+  compile-checked only.
+
+**Next.** Clear the J: lock, remake the copy from *Create a new library…*, and
+import **one small asset** from the box end to end — that is the only thing that
+tests the file tier, and it tests `Range`, the hash check and the uuid-preserving
+write in one go.
+
+---
+
+## 2026-09-12 (last) — the first batch lands, and the grid has to hold it
+
+Third entry today. The two below cover the import pipeline and the Houdini
+adapter; this is only what changed after them.
+
+**Done.**
+
+- **The Plants batch ran.** Library went **58 → 75**. `vegetation/grass` holds
+  **18**, `scan/plant` 1. 19 assets now carry geometry. First real use of
+  `ui/batch_add.py`, and the first time the library was filled by anything but
+  one-at-a-time.
+- **The Python Panel works in Houdini 22** — confirmed by screenshot, browsing
+  and building from inside the host.
+- `39476b0` — **multi-select import**: grid is `ExtendedSelection`, right-click
+  gives *Import N to Houdini*, one dialog, every selected asset built.
+  Non-mesh assets in the selection are skipped rather than refusing the batch.
+- `39476b0` — **tile delegate**, `gridmodel.TileDelegate` + `tile_sizes()`.
+  Grid is 16:9, image bottom-aligned, name in a fixed two-line block with
+  middle elision.
+- `strip_tokens` gained the mesh formats, so names stopped ending in `_fbx`.
+- Gotchas **15** and **16**; `architecture.md` §7b; the B1 measurement into
+  `ROADMAP.md`.
+
+**Decided.** The multi-select dialog reads its options from the **first**
+selected asset and applies them to all — Felix asked for it and named the
+hazard in the same breath, so it is stated **on screen** rather than hidden,
+and `ROADMAP.md` carries it as marked-not-solved. Per-asset greying is switched
+off when several are selected, because the asset the dialog was read from may
+be the only one *without* an opacity map. The tile grid is **one aspect for the
+whole view**, not per tile, because `setUniformItemSizes(True)` is what keeps
+it fast (gotcha 12). Name elision is **middle**, because two plants here differ
+by their Megascans hash alone and eliding the tail would make them identical.
+
+**Open.**
+
+- **The tile delegate has never been seen.** Geometry is verified arithmetically
+  — at every zoom the image gets exactly its declared height — and the
+  two-line splits are verified for real names, but no window has painted one.
+  Watch for the text block feeling cramped at zoom 96, and whether
+  bottom-aligning the image reads better than top.
+- **Houdini must be restarted to see any of it.** The panel's `ui.*` modules
+  are already imported; recreating the pane tab reuses the old code.
+- **B1 is 18 of a few hundred.** VaultCache has **four more top-level folders**
+  beyond `Plants`. `Maya/assets` is ~70 folders and much messier — vendor names
+  are inconsistent there in a way Megascans is not, so expect the batch
+  window's per-row overrides to earn their keep.
+- The 17 Plants went in as `vegetation/grass`, which needed **set all** because
+  `detect_type` says `scan` — `vegetation.primary_ext` is SpeedTree-only and
+  knows nothing about `.fbx`. That mismatch is unresolved: either widen
+  `vegetation.primary_ext` (which changes *detection* for model/scan/vegetation
+  alike) or accept setting it by hand every batch.
+- Gotcha **16 wants widening**. It describes the `AllEditTriggers` case; the
+  same cause bit again through `setCurrentIndex` in `_context_menu`. Two doors,
+  one bug.
+- `tools\budget.bat` **hung** this session on the `pause` that has been sitting
+  in *Open bugs* since 2026-09-11. No longer theoretical.
+
+**Next.** Import the rest of VaultCache — four folders, same window, and it is
+the source the adapter is best at.
+
+---
+
 ## 2026-09-12 (later) — Houdini reads the library, and B1 gets measured
 
 Same day as the entry below, which covers the import pipeline.

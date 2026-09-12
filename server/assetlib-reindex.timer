@@ -1,0 +1,14 @@
+[Unit]
+Description=Rebuild the asset library catalogue daily
+
+[Timer]
+# 04:00, after the 03:30 backup timer has finished with the same disk. Daily
+# rather than hourly because a full walk of the library through ntfs-3g costs
+# minutes of disk, and the library only changes when Felix imports something -
+# at which point `systemctl start assetlib-reindex` is the immediate answer.
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

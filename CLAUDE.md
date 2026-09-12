@@ -18,7 +18,7 @@ between the layers, marks design rules **RULE**, and ends with the
 |---|---|
 | `docs/architecture.md` | the map + the invariants — **read before touching anything** |
 | `docs/decisions.md` | what was decided and why, and the **central decision that must not be reopened** |
-| `docs/gotchas.md` | twelve traps that each cost an hour once |
+| `docs/gotchas.md` | eighteen traps that each cost an hour once |
 | `docs/features.md` | what is LIVE / DORMANT / VESTIGIAL / REMOVED |
 | `docs/History/` | removed code and why — the CLI, the original draft |
 | `docs/machine.md` | paths, Houdini versions, disks — the only machine-specific file |
@@ -28,7 +28,9 @@ between the layers, marks design rules **RULE**, and ends with the
 
 ## The code
 
-~5 050 lines. `ui/` imports `assetlib`; **`assetlib` imports no Qt and no `hou`**.
+11 063 lines. `ui/` and `houdini/` import `assetlib`;
+**`assetlib` imports no Qt and no `hou`** — that rule is what lets Houdini's
+own interpreter import the core directly.
 
 | file | role |
 |---|---|
@@ -43,19 +45,33 @@ between the layers, marks design rules **RULE**, and ends with the
 | `assetlib/upgrade.py` | brings every `asset.json` **on disk** up to schema; `.assetlib/state.json` marks the version last fully applied |
 | `assetlib/index.py` | SQLite + FTS5, search filters, counts |
 | `assetlib/verify.py` | invariant checks |
+| `assetlib/remote.py` | HTTP client for a server — **stdlib `urllib`, no Qt** |
+| `assetlib/catalog.py` | syncs a remote catalogue into `.assetlib/remote/<host>.db` |
+| `assetlib/materialise.py` | download an asset into `_cache/` — **never imports `commit.py`** |
+| `assetlib/deploy.py` | what travels when a new library copy is made |
+| `assetlib/shortcut.py` | Desktop shortcut, written via `wscript.exe` |
 | `assetlib/thumbnail.py` | `.hdr`/`.exr` decoding + tonemap → icons |
 | `ui/app.py` | the browser: sidebar, grid, search, Library menu |
+| `ui/batch_add.py` | import a folder of assets — one row per subfolder |
+| `ui/import_houdini.py` | the Import-to-Houdini options — **the decisions live here, not in Houdini** |
+| `ui/theme.py` | the one place that decides a colour; dark is forced |
 | `ui/add_asset.py` | the Add window — drop zones, plan table, per-row overrides |
 | `ui/edit_asset.py` | subclasses `AddAssetDialog` so the two cannot drift |
 | `ui/asset_view.py` | "Contents" — every file labelled by its ROLE |
-| `ui/gridmodel.py`, `ui/thumbcache.py`, `ui/writepool.py` | grid model, preview cache, single-threaded write pool |
+| `ui/gridmodel.py`, `ui/thumbcache.py`, `ui/writepool.py` | grid model + tile delegate, preview cache, single-threaded write pool |
+| `ui/netpool.py` | the 3 threads that talk to a server, and the shutdown that must not hang (gotcha 18) |
+| `ui/remote_libraries.py`, `ui/import_remote.py` | declare a server; download one asset |
+| `ui/first_run.py`, `ui/new_library.py` | setup on a fresh copy; make a fresh copy |
+| `houdini/` | the adapter — one package file to install; `build.py` makes Karma/MTLX/Solaris nodes. See `houdini/README.md` |
 | `config/*.json` | the tree, 17 types, 107 categories, 20 texture slots — **data, not code** |
 
 ## Run
 
 ```
 Asset Library.vbs            double-click: no console, log to launch.log
-run_ui.bat                   console launcher, for watching output live
+runtime\python.exe -m ui.app  console run, for watching output live
+                              (python.exe, not pythonw - the .vbs uses pythonw
+                              so no console can ever appear)
 ```
 
 No install, no pip, no system Python: it runs the bundled `runtime\python.exe -m
@@ -113,9 +129,15 @@ OpenEXR 3.4.14, xxhash 4.0.1.
 - **`short` at the end of a request means ultra concise.** Answer in the fewest
   words that carry the answer — no preamble, no restatement, no options. Absent
   the word, answer as normal.
+- **`ask` at the end of a request means decide nothing alone.** Collect every
+  open question the request leaves — everything that would otherwise be settled
+  by assumption — and put them to Felix as one multiple-choice block, each
+  question carrying its candidate answers. Ask them together, once, before any
+  work; do not proceed on a default while a question is still pending. Absent
+  the word, make the routine calls yourself.
 - **No verification loops.** Do not write or run a test, a benchmark or a probe
   script without asking first. One pass, one report; Felix observes the app.
-- **Check `docs/gotchas.md` before debugging an import.** Twelve of them are
+- **Check `docs/gotchas.md` before debugging an import.** Eighteen of them are
   already written down, and they are the expensive ones.
 - **Check `docs/decisions.md` before proposing a design.** The central decision
   — the library is prescriptive, not adaptive — has already been challenged

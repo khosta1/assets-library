@@ -4,10 +4,12 @@
 
   "roots": {
     "library": "library",
+    "cache": "_cache",
     "inbox": "_inbox",
     "quarantine": "_quarantine",
     "state": ".assetlib",
-    "_note": "Paths are relative to the library base (H:/Code/Assets_library). _inbox is the ONLY way in: drop a folder or a zip there and the tool consumes it. _quarantine holds imports that failed validation, so nothing is ever lost or silently dropped."
+    "_note": "Paths are relative to the library base (H:/Code/Assets_library). _inbox is the ONLY way in: drop a folder or a zip there and the tool consumes it. _quarantine holds imports that failed validation, so nothing is ever lost or silently dropped.",
+    "_cache": "Assets pulled down from a remote library, same {type}/{category}/{asset}/ shape as library/ so everything downstream reads them unchanged. A SIBLING of library/ and deliberately not inside .assetlib/: that folder means 'delete it, pay a rebuild', while this one means 'delete it, pay a re-download of gigabytes'. Two different promises, two different places. A cached asset KEEPS the uuid it has on the server - it is the same asset in a second location, not a copy with a new identity."
   },
 
   "tree": {

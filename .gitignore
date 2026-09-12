@@ -1,7 +1,9 @@
 library/
+_cache/
 _inbox/
 _quarantine/
 .assetlib/
+seed.log
 __pycache__/
 *.pyc
 Concrete/

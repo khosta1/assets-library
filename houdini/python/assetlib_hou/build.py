@@ -1201,8 +1201,12 @@ def _localize(asset: Asset, asset_dir: Path, cfg) -> Path:
     if not hip or hip == "$HIP":
         raise hou.Error("$HIP is not set - save the hip file before localizing")
 
-    rel = asset_dir.relative_to(cfg.library)
-    dest = Path(hip) / cfg.library.name / rel
+    # Whichever root holds it. relative_to(cfg.library) raised ValueError on a
+    # downloaded asset, and "localize" is exactly the button someone presses on
+    # one - it is the asset they do not have a permanent copy of.
+    root = cfg.root_containing(asset_dir) or cfg.library
+    rel = asset_dir.relative_to(root)
+    dest = Path(hip) / root.name / rel
     for src in asset_dir.rglob("*"):
         if src.is_file():
             target = dest / src.relative_to(asset_dir)

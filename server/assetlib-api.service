@@ -1,0 +1,49 @@
+[Unit]
+Description=Asset library catalogue API (read-only)
+Documentation=file:/opt/assetlib/server/README.md
+After=network-online.target
+Wants=network-online.target
+# Not After=srv-data2.mount: RequiresMountsFor works out the mount unit itself
+# and survives the disk being renamed. /srv/data2 is fstab'd nofail, so without
+# this the API can start on an unmounted mountpoint and serve an empty library
+# that looks exactly like a library someone emptied.
+RequiresMountsFor=/srv/data2
+
+[Service]
+Type=simple
+User=felix
+Group=felix
+WorkingDirectory=/opt/assetlib
+
+# The token lives here, 0600, and NOT in this unit file - `systemctl show`
+# prints Environment= lines to any user who asks.
+EnvironmentFile=/etc/assetlib/api.env
+
+# gthread, not sync. A sync worker is occupied for the whole of a response, so
+# two 1 GB downloads would starve the catalogue completely. Threads are right
+# here because the work is sendfile and disk, not Python.
+#
+# timeout 3600: gunicorn kills a worker whose request outlives it, and the
+# default is 30 seconds. A 1 GB asset over a relayed ZeroTier link at ~1 MB/s
+# is about 17 minutes, so the default would kill every real import. Not 0 -
+# a genuinely hung worker should still be reaped.
+ExecStart=/opt/assetlib/venv/bin/gunicorn \
+    --bind 0.0.0.0:8083 \
+    --pythonpath /opt/assetlib \
+    --worker-class gthread --workers 2 --threads 8 \
+    --timeout 3600 \
+    --access-logfile - \
+    server.api:app
+
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/var/lib/assetlib
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

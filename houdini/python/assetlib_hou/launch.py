@@ -84,7 +84,17 @@ def build_last_request() -> None:
     from assetlib.model import Asset
 
     cfg = find_config()
-    asset_dir = cfg.library / request["path"]
+    # Default "local" so a request file written before origins existed still
+    # resolves. root_for() returns None only for a remote origin, which cannot
+    # reach here - the library window refuses to send an asset it has not
+    # downloaded - but a request edited by hand could, and building from
+    # cfg.library in that case would build the wrong tree without saying so.
+    origin = request.get("origin", "local")
+    root = cfg.root_for(origin)
+    if root is None:
+        raise hou.Error(f"the request has origin '{origin}', which is not on "
+                        "this disk - import the asset in the library first")
+    asset_dir = root / request["path"]
     if not asset_dir.is_dir():
         raise hou.Error(f"the request points at {asset_dir}, which is not there")
 

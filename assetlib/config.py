@@ -11,6 +11,13 @@ from pathlib import Path
 
 CONFIG_FILES = ("library", "types", "categories", "texture_slots")
 
+# Where an asset physically is. Carried on every index row and every Houdini
+# request, because "library/{type}/{category}/{asset}" stopped being enough the
+# moment a second root existed: the same relative path is valid under both.
+ORIGIN_LOCAL = "local"
+ORIGIN_CACHE = "cache"
+REMOTE_PREFIX = "remote:"          # remote:<host> - catalogued, not on this disk
+
 
 def _strip_notes(obj):
     """Drop the "_note"/"_xxx" documentation keys so callers see only data."""
@@ -46,6 +53,10 @@ class Config:
 
         roots = self.library_cfg["roots"]
         self.library = self.base / roots["library"]
+        # cache_root, not cache: `self.cache` is already the thumbnail cache
+        # SETTINGS dict below, and two things called cache in one object is how
+        # a caller ends up joining a path onto a dict.
+        self.cache_root = self.base / roots.get("cache", "_cache")
         self.inbox = self.base / roots["inbox"]
         self.quarantine = self.base / roots["quarantine"]
         self.state = self.base / roots["state"]
@@ -60,8 +71,53 @@ class Config:
         """library/{type}/{category}/{asset}/ - the only shape allowed."""
         return self.library / type_id / category / asset
 
+    def root_for(self, origin: str | None) -> Path | None:
+        """Origin -> the root it lives under, or None when it is not on this disk.
+
+        None is a real answer, not a failure: a remote asset is catalogued and
+        browsable without a single byte of it being here, which is the whole
+        point of syncing the catalogue separately from the files. Callers must
+        handle it rather than assuming every row has a path.
+        """
+        if not origin or origin == ORIGIN_LOCAL:
+            return self.library
+        if origin == ORIGIN_CACHE:
+            return self.cache_root
+        return None
+
+    def asset_path(self, row) -> Path | None:
+        """Index row -> package directory. The ONE place that join is made.
+
+        Every caller used to write `cfg.library / row["path"]`, which was true
+        while there was one root and silently wrong the moment there were two -
+        the same relative path resolves under both, so the mistake produces a
+        real directory rather than an error.
+
+        Takes a dict OR a raw `sqlite3.Row`, which is why the lookup is spelt
+        this way instead of `row.get("origin")`: a Row has no `.get()` and
+        raises AttributeError rather than falling back to `__getitem__`. Callers
+        coming from index.search() hold dicts, but anything holding the result
+        of a fetchone() does not, and a function advertised as the one place
+        every path is built must not be picky about which of the two it gets.
+        """
+        keys = row.keys()
+        origin = row["origin"] if "origin" in keys else None
+        return None if (root := self.root_for(origin)) is None else root / row["path"]
+
+    def root_containing(self, path: Path) -> Path | None:
+        """Which root a package sits under. For code holding a path, not a row."""
+        path = Path(path).resolve()
+        for root in (self.library, self.cache_root):
+            try:
+                path.relative_to(root.resolve())
+            except ValueError:
+                continue
+            return root
+        return None
+
     def ensure_roots(self) -> None:
-        for p in (self.library, self.inbox, self.quarantine, self.state):
+        for p in (self.library, self.cache_root, self.inbox, self.quarantine,
+                  self.state):
             p.mkdir(parents=True, exist_ok=True)
         (self.state / "thumbs").mkdir(exist_ok=True)
 
@@ -88,6 +144,30 @@ class Config:
 
     def thumbs_dir(self) -> Path:
         return self.state / "thumbs"
+
+    # ---------------------------------------------------------------- remote
+
+    def remote_dir(self) -> Path:
+        """Everything to do with a remote library: hosts, catalogues, thumbs.
+
+        Under .assetlib/ and not beside _cache/, because all of it is genuinely
+        disposable - a deleted catalogue re-syncs in one request. _cache/ holds
+        the downloaded FILES, which do not.
+        """
+        return self.state / "remote"
+
+    def remote_db_path(self, host_name: str) -> Path:
+        """One catalogue per host, in a SECOND database.
+
+        Not a table in index.db and not a flag on a shared row. The local index
+        is rebuilt from disk by F5 and a remote catalogue cannot be - mixing
+        them would mean F5 either wipes the remote rows or has to know how to
+        talk HTTP, and both are worse than two files.
+        """
+        return self.remote_dir() / f"{host_name}.db"
+
+    def remote_thumbs_dir(self) -> Path:
+        return self.remote_dir() / "thumbs"
 
 
 def find_config(start: Path | None = None) -> Config:

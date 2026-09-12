@@ -61,6 +61,30 @@ Still open on it: no geometry format ranking (see *Open bugs*), `derived/`
 empty so Karma reads `.png` rather than `.rat`, and only Karma is wired —
 Arnold and Redshift would need a second mapping table, which is config.
 
+### Phase 2b — `C1` the cloud library — **client built 2026-09-13, unproven**
+
+The box at `/srv/data2/assets/library/` becomes the single master and this
+folder becomes a client. Server half is `server/`, owned by the server-panel
+session and deployed to `/opt/assetlib`; contract in
+`server/client-contract.md`.
+
+Seeded 2026-09-13: **75 packages, 1 039 files, 38.296 GB** over SMB, verified
+at both ends.
+
+Three tiers, kept apart because collapsing them is how it becomes slow:
+catalogue (`remote.py`, `catalog.py`, `index.search_union`), thumbnails
+(`_RemoteThumbJob`, `netpool.py`), files (`materialise.py`,
+`ui/import_remote.py`). A download lands in `_cache/` and **keeps its uuid** —
+that is the single-master decision, and `materialise.py` never imports
+`commit.py` because `Asset.new()` would mint a new one.
+
+**Nothing has been imported from the box yet.** Everything on it is also here
+with the same uuid, so the grid dedupes to `local` and no tile is blue. The
+file tier has never moved a byte. Next session's first job.
+
+Also landed alongside it: first-run panel, *Create a new library…*, Desktop
+shortcut and icon, and `pythonw` launching with no console at all.
+
 ### Phase 3 — `A2` derived formats — *~1 week*
 
 `.tx` / `.rat` / `.usda` into `derived/`, regenerable and never backed up.
@@ -109,6 +133,25 @@ thing in front rather than the thing being deferred.
 ---
 
 ## Open bugs
+
+**Observed 2026-09-13:**
+
+- **A folder on J: that Explorer would not delete, by an app that was not
+  running.** `pythonw.exe` from `J:\Assets_library\runtime\` was still alive
+  twenty minutes after the window closed, holding its own folder open. Fixed in
+  `ui/netpool.py` (`stopping()` / `shutdown()`) and `app.closeEvent`, but **the
+  locked J: copy predates the fix** — kill the PID and delete it by hand before
+  re-copying. Gotcha 18.
+- **`run_ui.bat` is gone** and `CLAUDE.md` still lists it under *Run*. The
+  `.vbs` comment has been corrected; the doc has not.
+- **`_cache/` has no size budget.** Raised and deliberately deferred. Unbounded
+  growth on a portable drive, which is exactly where it will be used.
+- **Remote thumbnails are never re-fetched** (contract: uuid is the cache key).
+  An asset re-imported on the box shows its old tile until
+  `.assetlib/remote/thumbs/` is cleared by hand.
+- **Nothing visual in this session has been looked at.** Blue cloud tiles, the
+  cloud toggle, the first-run panel, the new-library dialog and the import
+  dialog are compile-checked only.
 
 **App, found 2026-09-12 by the new orphan check in `verify`:**
 

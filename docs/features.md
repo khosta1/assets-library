@@ -13,12 +13,41 @@ REMOVED    deleted, listed so it does not get reinvented
 
 `ROADMAP.md` is what is being BUILT. This file is what EXISTS.
 
-Last brought in line: **2026-09-12**. ~5 200 lines; the library holds 57
+Last brought in line: **2026-09-12**. **8 317 lines** - 6 785 in
+`assetlib`+`ui`, 1 532 in `houdini/` - and the library holds 75
 assets and verifies clean apart from three orphan warnings (see `ROADMAP.md`).
 
 ---
 
 ## LIVE
+
+- **Remote catalogue** — `assetlib/remote.py` + `catalog.py`. Library ▸ *Remote
+  libraries…* declares a server; **Shift+F5** syncs `/api/catalog` into
+  `.assetlib/remote/<host>.db`, ETag-diffed. Search runs local ∪ remote
+  (`index.search_union`), so it works with the box asleep.
+- **Remote thumbnails** — fetched per visible tile onto `netpool` (3 threads),
+  cached at `.assetlib/remote/thumbs/<uuid>.jpg`, 60 s per-host cooldown after
+  a failure. A thumbnail 404 is per-asset and never cools the host.
+- **Remote import** — `assetlib/materialise.py` + `ui/import_remote.py`.
+  Manifest first, cost shown before anything starts, `.part` + `Range` resume,
+  hash-verified, into `_cache/{type}/{category}/{asset}/` **keeping the uuid**.
+  Full package or hero LOD + one resolution. *Written, never yet run against
+  the box.*
+- **Cloud tiles** — blue ground and outline for assets that are on a server and
+  not on this disk, and a `☁ Cloud` toggle that hides them. `cache` is not
+  marked: it is here.
+- **First-run setup panel** — `ui/first_run.py`. A copy with no assets and no
+  usable server shows it once: where assets live, server address + token,
+  Desktop shortcut. Skip is remembered.
+- **Create a new library…** — `assetlib/deploy.py` + `ui/new_library.py`.
+  Copies the app and its runtime (~293 MB) to another disk, no assets, no
+  index, no token; can carry the server ADDRESS so the new copy asks only for
+  the token.
+- **Desktop shortcut with the app icon** — `assetlib/shortcut.py`, written via
+  `wscript.exe` so no console appears; `ui/resources/asset_library.ico`.
+- **No console on launch** — `Asset Library.vbs` starts `pythonw.exe` directly;
+  `app._install_logging()` redirects stdout/stderr to `launch.log` and installs
+  an excepthook, because `pythonw` has no stdout at all.
 
 - **Hand-declared import, with full per-row override** — the Add window
   (Ctrl+N): drop zones, plan table, every decision overridable from a dropdown.
@@ -29,6 +58,13 @@ assets and verifies clean apart from three orphan warnings (see `ROADMAP.md`).
   from the measured pixel width (`16k`), re-emitted as `_<res>` before the
   UDIM tile; biggest promoted into `textures[slot]` by
   `commit._promote_best_resolution()`. `res:4k` asks *has this size*.
+- **Grid tiles sized to their content** — `gridmodel.TileDelegate` and
+  `tile_sizes()`: 16:9 tile, image bottom-aligned, name in a fixed two-line
+  block with middle elision. One aspect for the whole view, because
+  `setUniformItemSizes(True)` needs it (gotcha 12).
+- **Multi-select import to Houdini** — select a shelf of assets, one
+  options dialog, all built. Options are read from the FIRST asset; the
+  dialog says so. Non-mesh assets are skipped.
 - **Batch import** — `ui/batch_add.py`, button beside *Add asset* or
   Ctrl+Shift+N. One row per subfolder, shift-select, and a change to Type,
   Category or the checkbox spreads across the selection. Name never

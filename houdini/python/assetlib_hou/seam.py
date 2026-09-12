@@ -54,6 +54,12 @@ def report() -> list:
         cfg = find_config()
         out.append((True, "library", str(cfg.library)))
         out.append((cfg.library.is_dir(), "library exists", str(cfg.library.is_dir())))
+        # Reported even when absent, and absent is not a failure: _cache/ only
+        # exists once something has been downloaded. It is here so that "Houdini
+        # cannot find my downloaded asset" is answerable by looking at the seam
+        # test rather than by guessing which root it went to.
+        out.append((True, "cache root", str(cfg.cache_root)))
+        out.append((True, "cache exists", str(cfg.cache_root.is_dir())))
     except Exception as exc:                         # noqa: BLE001
         out.append((False, "find_config", str(exc)))
         return out

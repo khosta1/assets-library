@@ -14,14 +14,17 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QItemSelectionModel, Qt, QSize, QTimer
-from PySide6.QtGui import QAction, QFont
+from PySide6.QtGui import QAction, QFont, QIcon
 from PySide6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel, QLineEdit,
                                QListView, QMainWindow, QMenu, QMessageBox,
                                QPushButton, QSlider, QSplitter, QStatusBar,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout,
                                QWidget)
 
+from assetlib import catalog
 from assetlib import index as idx
+from assetlib import remote
+from assetlib import shortcut
 from assetlib import upgrade
 from assetlib.edit import delete_asset
 from assetlib.verify import verify
@@ -41,6 +44,12 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.cfg = cfg
         self.conn = idx.connect(cfg)
+        # Remote catalogues are opened at launch and NOT synced at launch. The
+        # rows are already on this disk, so the window fills instantly and works
+        # with the box switched off; a sync on the launch path would make
+        # startup depend on a machine that is asleep most of the time.
+        self.hosts = remote.load_hosts(cfg)
+        self.remotes = catalog.open_all(cfg, self.hosts)
         # Costs one small file read when the library is already current, so it
         # can sit on the launch path. Only a code upgrade makes it walk.
         self._upgrade = upgrade.run_if_pending(cfg)
@@ -49,6 +58,9 @@ class MainWindow(QMainWindow):
         # identical from the inside. Launching the wrong one is otherwise
         # invisible until you notice your changes are missing.
         self.setWindowTitle(f"Asset Library  —  {cfg.base}")
+        icon = shortcut.icon_path(cfg.base)
+        if icon.is_file():
+            self.setWindowIcon(QIcon(str(icon)))
         self.resize(1280, 820)
 
         self.search = QLineEdit(placeholderText="search…   try  type:texture  cat:concrete  res:8k  -src:megascans")
@@ -69,10 +81,19 @@ class MainWindow(QMainWindow):
             "For a single asset use Add.")
         self.batch_btn.clicked.connect(self._batch_add)
 
+        self.cloud_btn = QPushButton("☁ Cloud")
+        self.cloud_btn.setCheckable(True)
+        self.cloud_btn.setChecked(True)
+        self.cloud_btn.setToolTip(
+            "Show assets that are on a server and not on this disk.\n"
+            "Switch off to see only what you actually hold.")
+        self.cloud_btn.toggled.connect(self._toggle_cloud)
+
         top = QHBoxLayout()
         top.addWidget(self.add_btn)
         top.addWidget(self.batch_btn)
         top.addWidget(self.search, 1)
+        top.addWidget(self.cloud_btn)
         top.addWidget(QLabel("size"))
         top.addWidget(self.zoom)
 
@@ -82,6 +103,7 @@ class MainWindow(QMainWindow):
         self.tree.itemSelectionChanged.connect(self._queue_refresh)
 
         self.model = AssetGridModel(cfg)
+        self.model.set_hosts(self.hosts)
         self.view = QListView()
         self.view.setModel(self.model)
         self.view.setViewMode(QListView.IconMode)
@@ -98,7 +120,7 @@ class MainWindow(QMainWindow):
         # to touch, so a wide selection cannot make one of them do more than it
         # says.
         self.view.setSelectionMode(QListView.ExtendedSelection)
-        self.view.doubleClicked.connect(lambda *_: self._view_asset())
+        self.view.doubleClicked.connect(lambda *_: self._open_selected())
         self.view.selectionModel().selectionChanged.connect(self._update_detail)
         self.view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.view.customContextMenuRequested.connect(self._context_menu)
@@ -187,6 +209,24 @@ class MainWindow(QMainWindow):
         upgrade_now.setToolTip("Rewrite any asset.json still on an older schema")
         upgrade_now.triggered.connect(self._migrate)
         menu.addAction(upgrade_now)
+        menu.addSeparator()
+        desktop = QAction("Put a shortcut on the Desktop", self)
+        desktop.triggered.connect(self._make_shortcut)
+        desktop.setEnabled(shortcut.available())
+        menu.addAction(desktop)
+        newlib = QAction("Create a new library…", self)
+        newlib.setToolTip("A fresh empty copy of this app on another disk")
+        newlib.triggered.connect(self._new_library)
+        menu.addAction(newlib)
+        servers = QAction("Remote libraries…", self)
+        servers.setToolTip("Servers this library can browse, and their tokens")
+        servers.triggered.connect(self._remote_libraries)
+        menu.addAction(servers)
+        sync_now = QAction("Refresh remote catalogue", self)
+        sync_now.setShortcut("Shift+F5")
+        sync_now.setToolTip("Ask every server what it holds. Files are not downloaded.")
+        sync_now.triggered.connect(self._sync_catalogue)
+        menu.addAction(sync_now)
 
         self._timer = QTimer(self, singleShot=True, interval=150)
         self._timer.timeout.connect(self.refresh)
@@ -197,6 +237,39 @@ class MainWindow(QMainWindow):
 
         # Housekeeping with no deadline: it runs once the window is already up.
         thumbcache.sweep_async(cfg)
+
+        # Last, and only on a copy that has nothing. After the window is built,
+        # not before: if the setup panel raised, a fresh install would show a
+        # traceback instead of an app, and the one thing a first launch must do
+        # is open.
+        self._offer_setup()
+
+    def _offer_setup(self) -> None:
+        from .first_run import FirstRunDialog, mark_seen, needs_setup
+
+        if not needs_setup(self.cfg, len(self.model.rows), self.hosts):
+            return
+        suggested = next((h for h in self.hosts if h.url and not h.token), None)
+        dialog = FirstRunDialog(self.cfg, self, suggested)
+        accepted = dialog.exec() == QDialog.Accepted
+        # Marked whichever button was pressed. Skip is an answer, and an app
+        # that re-asks a declined question is one you learn to click past.
+        mark_seen(self.cfg)
+        if not accepted:
+            return
+        if dialog.shortcut_requested:
+            # quiet: a shortcut that could not be written must not be the first
+            # thing a new user sees. The app works without it.
+            self._make_shortcut(quiet=True)
+        if not dialog.hosts:
+            return
+
+        self.hosts = dialog.hosts
+        self._reopen_remotes()
+        self._build_tree()
+        self.refresh()
+        if dialog.sync_requested:
+            self._sync_catalogue()
 
     # ------------------------------------------------------------------ tree
 
@@ -209,7 +282,7 @@ class MainWindow(QMainWindow):
         # runs after every add, edit, delete and F5. Without this, adding one
         # asset would fold the sidebar back up under you - which is exactly the
         # annoyance the old unconditional expand was hiding.
-        counts = idx.counts(self.conn)
+        counts = idx.counts_union(self.conn, self._active_remotes())
         open_types = {self.tree.topLevelItem(i).data(0, TYPE_ROLE)
                       for i in range(self.tree.topLevelItemCount())
                       if self.tree.topLevelItem(i).isExpanded()}
@@ -268,11 +341,33 @@ class MainWindow(QMainWindow):
     def _queue_refresh(self) -> None:
         self._timer.start()
 
+    def _active_remotes(self) -> list:
+        """The catalogues search should look at right now.
+
+        Switching the toggle off hands back an empty list rather than filtering
+        the answer afterwards: the remote catalogue is simply not queried, so
+        "hide the cloud" costs less work than showing it rather than more.
+        """
+        return self.remotes if self.cloud_btn.isChecked() else []
+
+    def _toggle_cloud(self, _on: bool) -> None:
+        self._build_tree()
+        self.refresh()
+
     def refresh(self) -> None:
-        rows = idx.search(self.conn, self._query())
+        rows = idx.search_union(self.conn, self._active_remotes(), self._query())
         self.model.set_rows(rows)
         size = sum(r.get("size", 0) for r in rows)
         message = f"{len(rows)} asset(s)   {_human(size)}"
+        elsewhere = sum(1 for r in rows
+                        if str(r.get("origin", "")).startswith("remote:"))
+        if elsewhere:
+            message += f"   ({elsewhere} on the server)"
+        elif self.remotes and not self.cloud_btn.isChecked():
+            # Says WHY the count is lower. A filter that silently removes rows
+            # is a filter someone forgets is on, and then the library looks
+            # like it lost assets.
+            message += "   (cloud hidden)"
         # Whatever the startup migration did is worth saying once, on the first
         # refresh - after that the normal count takes the bar back.
         note = upgrade.describe(self._upgrade)
@@ -337,6 +432,90 @@ class MainWindow(QMainWindow):
         if result["upgraded"]:
             self._rebuild()
 
+    # ------------------------------------------------------------------ remote
+
+    def _make_shortcut(self, quiet: bool = False) -> None:
+        """Desktop shortcut for THIS copy, pointing at this folder's launcher.
+
+        Reachable from the menu as well as from the setup panel, because an
+        install that already had assets never sees that panel - and this one
+        did, which is precisely the copy that has been launched from a pinned
+        .bat by hand for weeks.
+        """
+        try:
+            where = shortcut.create(self.cfg.base)
+        except Exception as exc:                        # noqa: BLE001
+            if not quiet:
+                QMessageBox.warning(self, "Could not create the shortcut", str(exc))
+            return
+        self.statusBar().showMessage(f"shortcut created: {where}")
+
+    def _new_library(self) -> None:
+        """Copy the app - not the assets - somewhere else. Lazily imported."""
+        from .new_library import NewLibraryDialog
+
+        NewLibraryDialog(self.cfg, self.hosts, self).exec()
+
+    def _remote_libraries(self) -> None:
+        from .remote_libraries import RemoteLibrariesDialog
+
+        dialog = RemoteLibrariesDialog(self.cfg, self.hosts, self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        self.hosts = dialog.hosts
+        self._reopen_remotes()
+        self._build_tree()
+        self.refresh()
+
+    def _reopen_remotes(self) -> None:
+        """Close what is open and open what is configured, in that order.
+
+        A removed host whose connection stayed open would keep answering
+        searches from a catalogue nothing can refresh any more.
+        """
+        for _, conn in self.remotes:
+            try:
+                conn.close()
+            except Exception:                           # noqa: BLE001
+                pass
+        self.remotes = catalog.open_all(self.cfg, self.hosts)
+        # The model fetches remote thumbnails itself, so it needs the tokens.
+        # Also clears the cooldown, which is what makes "fix the token, sync,
+        # and the pictures appear" work without restarting the window.
+        self.model.set_hosts(self.hosts)
+
+    def _sync_catalogue(self) -> None:
+        """Shift+F5. Ask every server what it holds; download no files."""
+        from .remote_libraries import sync_async
+
+        if not self.hosts:
+            QMessageBox.information(
+                self, "Refresh remote catalogue",
+                "No servers are configured yet.\n\n"
+                "Library ▸ Remote libraries… to add one.")
+            return
+
+        self.statusBar().showMessage("asking the server(s)…")
+        sync_async(self.cfg, self.hosts, self._sync_finished)
+
+    def _sync_finished(self, results: list) -> None:
+        # Rewrite the hosts file here, on the GUI thread: the job updated each
+        # host's ETag in memory and saved, but a host removed while the sync was
+        # in flight must not be written back by it.
+        remote.save_hosts(self.cfg, self.hosts)
+        self._reopen_remotes()
+        self._build_tree()
+        self.refresh()
+
+        bad = [f"{name}: {message}" for name, ok, message in results if not ok]
+        good = [f"{name}: {message}" for name, ok, message in results if ok]
+        if bad:
+            QMessageBox.warning(
+                self, "Some servers did not answer",
+                "\n".join(bad) + ("\n\n" + "\n".join(good) if good else ""))
+        self.statusBar().showMessage(
+            "   ·   ".join(good) if good else "no server answered")
+
     # ------------------------------------------------------------------ import
 
     def _add_asset(self) -> None:
@@ -362,6 +541,62 @@ class MainWindow(QMainWindow):
             self.refresh()
             self.statusBar().showMessage(f"imported {dialog.added} asset(s)")
 
+    def _open_selected(self) -> None:
+        """Double-click. Means "show me this asset" - which differs by origin.
+
+        On a local asset that is Contents. On a cloud one there is nothing to
+        show yet, and the useful answer to "show me this" is the window that
+        says what it would cost to have it.
+        """
+        row = self._current_row()
+        if row and self._host_for(row) is not None:
+            self._import_remote()
+            return
+        self._view_asset()
+
+    def _host_for(self, row):
+        """The server a cloud row came from, or None if it is not a cloud row."""
+        origin = str(row.get("origin") or "")
+        if not origin.startswith("remote:"):
+            return None
+        return next((h for h in self.hosts
+                     if h.name == origin[len("remote:"):]), None)
+
+    def _import_remote(self) -> None:
+        """Download the selected cloud asset. One at a time, deliberately.
+
+        A multi-select download would queue gigabytes behind one click, and the
+        thing that makes this bearable - seeing what it costs before it costs
+        it - does not survive being applied to twelve assets at once.
+        """
+        from .import_remote import ImportRemoteDialog
+
+        row = self._current_row()
+        if not row:
+            return
+        host = self._host_for(row)
+        if host is None:
+            return
+
+        dialog = ImportRemoteDialog(self.cfg, host, row, self)
+        dialog.exec()
+        if dialog.result_dir is None:
+            return
+
+        # Re-index from what actually landed. The download wrote asset.json
+        # verbatim, so this reads the SERVER's uuid back and the row flips from
+        # remote to cache - which is what stops the tile being blue.
+        from assetlib.model import Asset
+
+        try:
+            idx.upsert(self.conn, Asset.read(dialog.result_dir),
+                       dialog.result_dir, self.cfg.cache_root, "cache")
+        except Exception as exc:                        # noqa: BLE001
+            QMessageBox.warning(self, "Downloaded, but not indexed", str(exc))
+        self.model.invalidate(row["uuid"])
+        self._build_tree()
+        self.refresh()
+
     def _view_asset(self) -> None:
         """Look inside the package: every file, with what asset.json says it is."""
         path = self._selected_dir()
@@ -385,7 +620,14 @@ class MainWindow(QMainWindow):
         row = self._current_row()
         if not row:
             return None
-        path = self.cfg.library / row["path"]
+        path = self.cfg.asset_path(row)
+        if path is None:
+            # Catalogued on a server and not downloaded. Not an error, and not
+            # something to phrase as one - the asset is real, it is just not
+            # here yet.
+            self.statusBar().showMessage(
+                f"{row['name']} is on {row.get('origin', '?')} - import it first")
+            return None
         if not path.exists():
             self.statusBar().showMessage(f"missing on disk: {path}")
             return None
@@ -446,8 +688,15 @@ class MainWindow(QMainWindow):
             return
 
         assets = []
+        skipped_remote = 0
         for row in rows:
-            path = self.cfg.library / row["path"]
+            path = self.cfg.asset_path(row)
+            if path is None:
+                # Not downloaded. Skipped like a non-mesh asset rather than
+                # refusing the batch, but counted - silently building 3 of 12
+                # is the failure people do not notice.
+                skipped_remote += 1
+                continue
             if not path.exists():
                 continue
             try:
@@ -457,6 +706,14 @@ class MainWindow(QMainWindow):
                                      f"{row['name']}: {exc}")
                 return
         if not assets:
+            if skipped_remote:
+                # Every one of them was remote. A dialog that opens on nothing
+                # and a window that does nothing look identical, so say which
+                # it was.
+                QMessageBox.information(
+                    self, "Nothing to build",
+                    f"{skipped_remote} selected asset(s) are catalogued but not "
+                    "downloaded yet. Import them first.")
             return
 
         # The dialog is built from the FIRST asset and its answers are applied
@@ -484,7 +741,8 @@ class MainWindow(QMainWindow):
                 + "\n".join(failed[:10]))
         self.statusBar().showMessage(
             f"sent {built} asset(s) to Houdini"
-            + (f"   ·   {len(failed)} failed" if failed else ""))
+            + (f"   ·   {len(failed)} failed" if failed else "")
+            + (f"   ·   {skipped_remote} not downloaded" if skipped_remote else ""))
 
     def _context_menu(self, point) -> None:
         """Right-click on a tile.
@@ -513,6 +771,11 @@ class MainWindow(QMainWindow):
             return
 
         menu = QMenu(self)
+        if self._host_for(row) is not None:
+            # First, and alone at the top: on a cloud asset it is the only
+            # entry that can do anything. Contents and Edit need files.
+            menu.addAction("Import from the server…", self._import_remote)
+            menu.addSeparator()
         menu.addAction("Contents…", self._view_asset)
         menu.addAction("Edit…", self._edit_asset)
         with_geo = [r for r in self._selected_rows() if self._has_geometry(r)]
@@ -639,17 +902,25 @@ class MainWindow(QMainWindow):
         res = f"{row['resolution']}px" if row.get("resolution") else ""
         bits = [row["name"], f"{row['type']} / {row['category']}", res,
                 _human(row.get("size", 0))]
-        path = self.cfg.library / row["path"]
-        self.detail.setText("   ·   ".join(b for b in bits if b) + f"\n{path}")
-        self.open_btn.setEnabled(True)
-        self.edit_btn.setEnabled(True)
-        self.view_btn.setEnabled(True)
+        path = self.cfg.asset_path(row)
+        # A remote asset has no path to show, so it shows where it IS instead.
+        # Blanking the line would read as "this asset has no files".
+        where = str(path) if path is not None else f"on {row.get('origin', '?')}"
+        self.detail.setText("   ·   ".join(b for b in bits if b) + f"\n{where}")
+        here = path is not None
+        self.open_btn.setEnabled(here)
+        self.edit_btn.setEnabled(here)
+        self.view_btn.setEnabled(here)
 
     def _open_folder(self) -> None:
         row = self._current_row()
         if not row:
             return
-        path = self.cfg.library / row["path"]
+        path = self.cfg.asset_path(row)
+        if path is None:
+            self.statusBar().showMessage(
+                f"{row['name']} is not downloaded - nothing to open")
+            return
         if not path.exists():
             self.statusBar().showMessage(f"missing on disk: {path}")
             return
@@ -672,8 +943,63 @@ class MainWindow(QMainWindow):
         self.view.setGridSize(grid)
 
     def closeEvent(self, event):
+        # Network jobs first, and before the databases they might want to
+        # write to. Everything below is local and finishes immediately.
+        drained = netpool.shutdown()
+
         self.conn.close()
+        for _, conn in self.remotes:
+            try:
+                conn.close()
+            except Exception:                           # noqa: BLE001
+                pass
         super().closeEvent(event)
+
+        if not drained:
+            # A job is still blocked in a socket read and cannot be interrupted
+            # from here. Qt will wait for it before the process can exit, which
+            # is how a closed window left pythonw.exe alive - invisible, with
+            # no console, holding its own folder open so it could not even be
+            # deleted.
+            #
+            # _exit rather than sys.exit: sys.exit unwinds, and the unwinding
+            # is exactly what blocks. Nothing is lost - every database was just
+            # closed above, asset.json is written at commit time, and a partly
+            # downloaded file is a .part that resumes.
+            import os
+
+            print("netpool did not drain; exiting hard", flush=True)
+            os._exit(0)
+
+
+def _install_logging(base: Path) -> None:
+    """Give the app somewhere to write when it has no console.
+
+    Launched through `Asset Library.vbs` the interpreter is `pythonw.exe`, which
+    has no console AND no stdout: under it `sys.stdout` is None, so a stray
+    print() raises and a traceback goes nowhere at all. That is the price of
+    never flashing a cmd window, and this is what buys it back - the output goes
+    to launch.log instead, silent when all is well and readable when it is not.
+
+    Also an excepthook, because the expensive failure is the one BEFORE the
+    window exists: with no console and no hook, a crash at import time is a
+    program that starts and vanishes with nothing anywhere saying why.
+    """
+    if sys.stdout is not None and sys.stderr is not None:
+        return                          # a real console: leave it alone
+
+    try:
+        stream = open(base / "launch.log", "a", encoding="utf-8", buffering=1)
+    except OSError:
+        return
+    sys.stdout = sys.stderr = stream
+
+    def _log_crash(kind, value, tb):
+        import traceback
+        traceback.print_exception(kind, value, tb, file=stream)
+        stream.flush()
+
+    sys.excepthook = _log_crash
 
 
 def main(cfg=None) -> int:
@@ -681,6 +1007,7 @@ def main(cfg=None) -> int:
         from assetlib.config import find_config
 
         cfg = find_config(Path(__file__).parent)
+    _install_logging(cfg.base)
     # There is no `init` command any more: the tree is materialised on start.
     cfg.ensure_roots()
     cfg.ensure_tree()

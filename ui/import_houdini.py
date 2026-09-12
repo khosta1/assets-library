@@ -233,15 +233,20 @@ def write_request(asset: Asset, asset_dir: Path, cfg, opts: dict) -> Path:
     a request that survives a Houdini restart is more useful than one that does
     not. Overwritten each time: this is "what to build next", not a queue.
     """
+    root = cfg.root_containing(asset_dir) or cfg.library
     payload = {
         "uuid": asset.uuid,
         "name": asset.name,
         "type": asset.type,
         "category": asset.category,
-        # Relative to library/, like every path in the index. An absolute path
+        # Relative to a root, like every path in the index. An absolute path
         # here would break the moment the disk gets a different letter, which is
         # the whole thing the library is built to survive.
-        "path": asset_dir.relative_to(cfg.library).as_posix(),
+        "path": asset_dir.relative_to(root).as_posix(),
+        # WHICH root, and this is not optional now that there are two. The same
+        # relative path exists under library/ and _cache/, so a request without
+        # it does not fail - it silently builds the wrong copy of the asset.
+        "origin": "cache" if root == cfg.cache_root else "local",
         "options": opts,
     }
     cfg.state.mkdir(parents=True, exist_ok=True)
