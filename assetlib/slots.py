@@ -22,6 +22,9 @@ class SlotMatcher:
         self.output_names = s["output_names"]
         self.format_priority = s["format_priority"]
         self.preview_stems = [p.lower() for p in s["preview_stems"]]
+        self.secondary_tokens = [
+            t.lower() for t in s.get("secondary_maps", {}).get("tokens", [])
+        ]
         self.preview_rules = s.get("preview_rules", {})
         m = s.get("matching", {})
         self.udim_patterns = [re.compile(p) for p in m.get("udim_patterns", [])]
@@ -31,6 +34,25 @@ class SlotMatcher:
         self.min_slots = int(m.get("min_slots_for_texture_set", 2))
 
     # ---------------------------------------------------------------- matching
+
+    def secondary(self, filename: str) -> str | None:
+        """The token making this image something other than the asset's surface.
+
+        Asked BEFORE match(), because a billboard's BaseColor matches the
+        diffuse keyword perfectly - it is a correct match to the wrong question.
+        Returning the token rather than a bool so the caller can say WHICH kind
+        it is; "billboard map" in the rejected column is an explanation, "no
+        slot matched" is a shrug.
+
+        Whole token only: `_billboard_` yes, `billboarding` no. A substring test
+        is how `preview_stems` had to warn that a bare 'asset' would swallow
+        every file a vendor happened to name that way.
+        """
+        parts = re.split(r"[^a-z0-9]+", filename.lower())
+        for token in self.secondary_tokens:
+            if token in parts:
+                return token
+        return None
 
     def _tile(self, found):
         """The UDIM number a match represents, or None if it is not a tile.
@@ -142,6 +164,16 @@ class SlotMatcher:
     def keep_variant(self, key: str) -> str | None:
         """Which variant of a slot the library stores (normals: opengl only)."""
         return self.by_key.get(key, {}).get("keep")
+
+    def superseded_by(self, key: str) -> str | None:
+        """The slot that wins when both are supplied, or None.
+
+        Only consulted when BOTH are present. A gloss map alone is still a
+        perfectly good roughness once inverted, which is what post_node is for;
+        this answers the different question of what to do when the vendor
+        shipped the answer as well as the workings.
+        """
+        return self.by_key.get(key, {}).get("superseded_by")
 
     def output_filename(self, asset: str, key: str, ext: str, udim: str | None = None,
                         lod: int | None = None, res: str | None = None) -> str:

@@ -57,7 +57,8 @@
       "collapse repeated underscores",
       "trim leading/trailing underscores"
     ],
-    "variant_patterns": ["big", "small", "medium", "large", "tall", "wide", "var\\d+", "variant\\d+", "v\\d{2,}", "alt\\d*"],
+    "variant_patterns": ["big", "small", "medium", "large", "tall", "wide", "var\\d+", "var[a-z]", "variant\\d+", "variant[a-z]", "v\\d{2,}", "alt\\d*"],
+    "_var_letters": "var[a-z] is Fab's form and it is a whole library, not an edge case: 11 of the 37 FabLibrary assets ship VarA..VarK, and six of those also carry LOD0-4. Without it every variant read as None, they collided on (ext, lod, variant), and roughly ninety meshes were rejected as 'second .fbx file for lod0' - Tundra_Grass alone is 9 variants x 5 levels. The pattern is matched as (?:^|_)(...)(?=_|$), so var[a-z] is a FOUR-CHARACTER token and nothing longer: _VarA_ matches, _varnish_ does not, because the lookahead fails after one letter.",
     "_variant_patterns": "A variant is a SECOND version of the same asset that must be kept, not a lower-quality one to discard. Megascans ships DactylisGlomerata_hznoe_Big_lod0_OL.fbx and _Small_lod0_OL.fbx: same textures, two meshes, three LODs each. Without this the second one lost the (ext, lod) contest and half the asset never imported. Matched after UDIM, resolution and LOD are already off the stem, and the result is only a PRE-FILL - the Var column in the Add window is what actually decides, because a token that looks like a variant and is part of the name is exactly the mistake a person catches in one glance and a pattern never will.",
 
     "strip_tokens": ["1k", "2k", "4k", "8k", "16k", "png", "jpg", "jpeg", "exr", "tif", "tiff", "tga", "hdr", "psd", "bmp", "webp", "fbx", "obj", "abc", "usd", "usda", "usdc", "usdz", "ply", "stl", "glb", "gltf", "hires", "lowres", "final", "new", "copy", "v01", "(1)", "(2)"],

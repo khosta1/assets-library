@@ -85,7 +85,9 @@
       "dtype": "float",
       "colorspace": "none",
       "post_node": "invert",
-      "_note": "Legacy gloss maps are inverted roughness. post_node handles it so old libraries import correctly."
+      "superseded_by": "roughness",
+      "_note": "Legacy gloss maps are inverted roughness. post_node handles it so old libraries import correctly.",
+      "_superseded_by": "When the SAME asset ships both, the roughness is kept and the gloss goes to extra/. They are one quantity, not two: output_names sends both to <asset>_roughness.<ext>, so a vendor shipping both made two files claim one destination and conflicts() blocked the whole import (invariant 4). Fab ships both on every asset. Same rule as normals - store one convention, regenerate the other - stated across two slots because gloss was modelled as its own slot rather than as a variant of roughness. Kept, not deleted: a gloss map is real data and extra/ is where the library puts what it will not interpret."
     },
     {
       "key": "metallic",
@@ -226,6 +228,13 @@
     "color_slots": [".png", ".tif", ".jpg"],
     "_data_slots": "normal/roughness/disp/metallic etc - float precision matters, exr preferred.",
     "_color_slots": "basecolor/emissive/specular - sRGB, jpg acceptable, png preferred."
+  },
+
+  "secondary_maps": {
+    "_note": "Tokens that mean 'this image belongs to something OTHER than the asset's own surface'. Matched as a whole token anywhere in the stem, case-insensitively. Such a file is never slot-matched; it goes to extra/ verbatim, like anything else the library keeps but does not interpret.",
+    "_why": "Fab ships Thatching_Grass_..._4K_Billboard_BaseColor.jpg beside Thatching_Grass_..._4K_BaseColor.jpg. Both match the BaseColor keyword, so both became candidates for the diffuse slot, and _settle_competing had to choose between them on a tie-break - equal format, equal group size, so it fell through to the alphabetical rule, where a shared prefix means the LONGER stem wins. The billboard won, on all four slots that exist in both flavours (BaseColor, Normal, Opacity, Translucency), and the asset's real maps went to extra/. A billboard is an impostor card for distant LODs; it is not a lower-quality version of the surface and it was never a candidate for the slot. Excluded BEFORE matching rather than by inverting that tie-break, because 'shorter name wins' is just as arbitrary and would quietly change every other contested slot in the library.",
+    "_keeping_them": "extra/, not rejected. The billboard set is real and usable - for an impostor. Nothing in asset.json points at it, so no adapter picks it up by accident. Making impostors usable properly means a billboard VARIANT, which is a schema dimension and not a config line.",
+    "tokens": ["billboard", "impostor"]
   },
 
   "vendor_sidecars": {

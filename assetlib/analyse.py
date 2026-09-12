@@ -595,6 +595,38 @@ def _settle_competing(plan: ImportPlan, key: str, entries: list,
     return winner[1]
 
 
+def _drop_superseded(plan: ImportPlan, candidates: dict, matcher: SlotMatcher) -> None:
+    """Two slots, one quantity: keep the canonical one, bank the other.
+
+    `gloss` and `roughness` both write <asset>_roughness.<ext>, because a gloss
+    map IS a roughness map inverted - which is right for a vendor who shipped
+    only one of them, and a conflict for one who shipped both. Fab ships both on
+    every asset, so two files claimed one destination and conflicts() blocked
+    the import (invariant 4) rather than the import quietly going wrong.
+
+    Per LOD level, not per asset: a level supplying only gloss still gets its
+    roughness from it.
+
+    The loser goes to extra/, never away. It is real data, and the Add window
+    can rebind a row if the vendor's gloss is the better map on some asset
+    nobody has looked at yet.
+    """
+    for (key, lod), entries in list(candidates.items()):
+        winner = matcher.superseded_by(key)
+        if not winner or (winner, lod) not in candidates:
+            continue
+        for path, size, udim, _, _ in entries:
+            plan.actions.append(bonus_action(
+                plan, path, size,
+                f"a real '{winner}' map is supplied too, and the two are one "
+                f"quantity - the '{key}' is the redundant half", udim))
+        del candidates[(key, lod)]
+        where = f" at lod{lod}" if lod else ""
+        plan.warnings.append(
+            f"{key} and {winner} both supplied{where} - kept {winner}, "
+            f"{key} went to extra/")
+
+
 def _emit_slot_actions(plan: ImportPlan, candidates: dict, matcher: SlotMatcher) -> set:
     """One file per slot, in the winning variant and format.
 
@@ -602,6 +634,8 @@ def _emit_slot_actions(plan: ImportPlan, candidates: dict, matcher: SlotMatcher)
     exactly the same rules as a standalone texture set - the library must not
     have two ideas about what a normal map is called.
     """
+    _drop_superseded(plan, candidates, matcher)
+
     for (key, lod), entries in candidates.items():
         wanted = matcher.keep_variant(key)
         if wanted:
@@ -762,6 +796,14 @@ def _plan_texture_set(plan: ImportPlan, files, cfg, matcher: SlotMatcher) -> Non
             plan.actions.append(bonus_action(plan, path, size))
             continue
 
+        secondary = matcher.secondary(path.name)
+        if secondary:
+            plan.actions.append(bonus_action(
+                plan, path, size,
+                f"{secondary} map - belongs to an impostor card, not to this "
+                "asset's own surface"))
+            continue
+
         key, udim, variant = matcher.match(path.name, plan.name)
         if key == PREVIEW:
             previews.append((path, size))
@@ -860,6 +902,17 @@ def _plan_generic(plan: ImportPlan, files, cfg, matcher: SlotMatcher, strategy: 
             continue
 
         if ext in IMAGE_EXTS:
+            # Same order as the texture-set planner: asked before match(),
+            # because a billboard's BaseColor matches the diffuse keyword
+            # perfectly. It is a correct answer to the wrong question.
+            secondary = matcher.secondary(path.name)
+            if secondary:
+                plan.actions.append(bonus_action(
+                    plan, path, size,
+                    f"{secondary} map - belongs to an impostor card, not to "
+                    "this asset's own surface"))
+                continue
+
             key, udim, variant = matcher.match(path.name, plan.name)
             if key == PREVIEW:
                 previews.append((path, size))
