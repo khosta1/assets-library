@@ -36,3 +36,7 @@ __pycache__/
 
 # Local shortcut, not part of the project.
 *.lnk
+
+# Bulk port: generated plan and run log.
+context/port-plan.json
+port.log

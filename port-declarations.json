@@ -1,0 +1,153 @@
+{
+  "root": "G:/ESMA/3D/Perso/Environment_art/Assets/VaultCache/FabLibrary",
+  "assets": {
+    "Beach_Boulder-51f700c9": {
+      "type": "scan",
+      "category": "rock"
+    },
+    "Bigleaf_Hydrangea-b8220edc": {
+      "type": "vegetation",
+      "category": "shrub"
+    },
+    "Burnt_Brick_Debris-56a69aaa": {
+      "type": "scan",
+      "category": "object"
+    },
+    "Cement_Rubble-ea48c027": {
+      "type": "scan",
+      "category": "object"
+    },
+    "Curbside_Weeds-d87922e7": {
+      "type": "vegetation",
+      "category": "grass"
+    },
+    "European_Spindle-f3c45cd9": {
+      "type": "vegetation",
+      "category": "shrub"
+    },
+    "Forest_Terrain-8a8981c4": {
+      "type": "scan",
+      "category": "surface"
+    },
+    "Granite_Rock-01d40602": {
+      "type": "scan",
+      "category": "rock"
+    },
+    "Granite_Rock-68ea246b": {
+      "type": "scan",
+      "category": "rock"
+    },
+    "Granite_Rocks-da9190e9": {
+      "type": "scan",
+      "category": "rock"
+    },
+    "Kikuyu_Grass-4a7f5036": {
+      "type": "vegetation",
+      "category": "grass"
+    },
+    "Lady_Fern-3eead001": {
+      "type": "vegetation",
+      "category": "shrub"
+    },
+    "Large_Fallen_Tree-5796e9d5": {
+      "type": "scan",
+      "category": "object"
+    },
+    "Lichen_Rock-32315169": {
+      "type": "scan",
+      "category": "rock"
+    },
+    "Mossy_Embankment-65c47533": {
+      "type": "scan",
+      "category": "surface"
+    },
+    "Mossy_Forest_Roots-a2051e20": {
+      "type": "scan",
+      "category": "object"
+    },
+    "Mossy_Rocks-bc7eac50": {
+      "type": "scan",
+      "category": "rock"
+    },
+    "Mossy_Tree-24ae38f4": {
+      "type": "vegetation",
+      "category": "tree"
+    },
+    "Nordic_Beach_Rocky_Ground-326208d9": {
+      "type": "scan",
+      "category": "surface"
+    },
+    "Nordic_Forest_Cliff_Large-3a67a52f": {
+      "type": "scan",
+      "category": "rock"
+    },
+    "Nordic_Forest_Cliff_Large-8a821f06": {
+      "type": "scan",
+      "category": "rock"
+    },
+    "Nordic_Forest_Ledge_Rock_Large-ba2e0cb1": {
+      "type": "scan",
+      "category": "rock"
+    },
+    "Nordic_Forest_Tree_Log_Large-c11bff3d": {
+      "type": "scan",
+      "category": "object"
+    },
+    "Nordic_Forest_Tree_Log_Small-e925c2fe": {
+      "type": "scan",
+      "category": "object"
+    },
+    "Old_Brick-f9378d8c": {
+      "type": "scan",
+      "category": "object"
+    },
+    "Old_Tree_Branch-1825220b": {
+      "type": "scan",
+      "category": "object"
+    },
+    "Red_Brick-04f61062": {
+      "type": "scan",
+      "category": "object"
+    },
+    "Red_Brick-09ea3f16": {
+      "type": "scan",
+      "category": "object"
+    },
+    "Red_Brick-579592fb": {
+      "type": "scan",
+      "category": "object"
+    },
+    "Ribbon_Grass-6b7af6c8": {
+      "type": "vegetation",
+      "category": "grass"
+    },
+    "Rocky_Forest_Path-74382b28": {
+      "type": "scan",
+      "category": "surface"
+    },
+    "Sea_Thrift-c14a3c67": {
+      "type": "vegetation",
+      "category": "flower"
+    },
+    "Thatching_Grass-0311f445": {
+      "type": "vegetation",
+      "category": "grass"
+    },
+    "Tundra_Grass-3d87458a": {
+      "type": "vegetation",
+      "category": "grass"
+    },
+    "Tundra_Rocky_Ground-b776f801": {
+      "type": "scan",
+      "category": "surface"
+    },
+    "Wild_Grass-50d9a417": {
+      "type": "vegetation",
+      "category": "grass"
+    },
+    "Wild_Grass-5848d16a": {
+      "type": "vegetation",
+      "category": "grass"
+    }
+  }
+}
