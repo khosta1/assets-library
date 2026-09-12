@@ -53,31 +53,34 @@ a token exists, and weakening the server's fail-closed rule for it would buy
 nothing. **No frozen `.exe`**: it would break the Houdini seam, which needs an
 importable `assetlib/` on disk — recorded in `decisions.md`.
 
+**Proven.** Same day, after the entry above was written: the J: lock was
+cleared, the copy remade from *Create a new library…*, and the whole chain run
+from an empty `library/` — first-run panel, token, Shift+F5, all 75 arriving as
+cloud tiles, and an asset downloaded, hash-verified and flipped from blue to
+local. Felix: "everything is working as intended." So `Range`, the hash check,
+the uuid-preserving write and the origin plumbing are all exercised, not merely
+compiled. The three items this entry originally listed as unobserved are closed.
+
 **Open.**
 
-- **Nothing has been imported from the box.** Every asset on it is also here
-  with the same uuid, so `search_union` dedupes them all to `local` and **no
-  tile is blue**. Phases 2–4 compile and import; the file tier has never moved
-  a byte. The real test is the J: copy, where `library/` is empty and all 75
-  arrive as cloud.
-- **`J:\Assets_library` is locked** by `pythonw.exe` PID 29884 running the
-  pre-fix build. Kill it and delete the folder before re-copying.
-- **`run_ui.bat` was deleted** this session (not by the agent). The `.vbs`
-  comment pointing at it has been corrected to a literal command line;
-  `CLAUDE.md` still lists it under **Run**.
 - **`_cache/` has no size budget.** Asked and deferred: "no cache budget needed
-  for now". On a portable drive it grows until the disk is full.
+  for now". On a portable drive it grows until the disk is full. `thumbcache.py`
+  already has the pattern — a budget in `library.json` and an LRU sweep.
 - **Remote thumbnails are never re-fetched.** Per the contract, uuid is the
   cache key. An asset re-imported on the box keeps its old tile until
   `.assetlib/remote/thumbs/` is cleared by hand.
-- **Nothing visual has been observed by the agent** — the blue tiles, the cloud
-  toggle, the first-run panel, the new-library dialog and the import dialog are
-  compile-checked only.
+- **Hero-LOD subsetting has only met constructed manifests.** The interesting
+  path — a slot with no file at the requested resolution falling back to the
+  nearest smaller — has not seen a real Megascans package.
+- **`run_ui.bat` was deleted** this session (not by the agent). `CLAUDE.md` and
+  the `.vbs` comment have been corrected to a literal `runtime\python.exe -m
+  ui.app`.
 
-**Next.** Clear the J: lock, remake the copy from *Create a new library…*, and
-import **one small asset** from the box end to end — that is the only thing that
-tests the file tier, and it tests `Range`, the hash check and the uuid-preserving
-write in one go.
+**Next.** `B1` bulk migration — Felix's call, taken at the end of this session.
+`VaultCache` first, per the order already in `ROADMAP.md`: uniformly named, and
+every asset in it exercises resolutions, variants and LODs. Two known bugs will
+bite during it — LOD-tagged textures binding nothing, and `.rat`/`.tx` landing
+in `extra/` instead of `derived/` — both in *Open bugs*.
 
 ---
 

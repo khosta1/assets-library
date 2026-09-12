@@ -31,8 +31,7 @@ assets and verifies clean apart from three orphan warnings (see `ROADMAP.md`).
 - **Remote import** — `assetlib/materialise.py` + `ui/import_remote.py`.
   Manifest first, cost shown before anything starts, `.part` + `Range` resume,
   hash-verified, into `_cache/{type}/{category}/{asset}/` **keeping the uuid**.
-  Full package or hero LOD + one resolution. *Written, never yet run against
-  the box.*
+  Full package or hero LOD + one resolution. Proven end to end 2026-09-13.
 - **Cloud tiles** — blue ground and outline for assets that are on a server and
   not on this disk, and a `☁ Cloud` toggle that hides them. `cache` is not
   marked: it is here.

@@ -61,7 +61,7 @@ Still open on it: no geometry format ranking (see *Open bugs*), `derived/`
 empty so Karma reads `.png` rather than `.rat`, and only Karma is wired —
 Arnold and Redshift would need a second mapping table, which is config.
 
-### Phase 2b — `C1` the cloud library — **client built 2026-09-13, unproven**
+### Phase 2b — `C1` the cloud library — **done 2026-09-13**
 
 The box at `/srv/data2/assets/library/` becomes the single master and this
 folder becomes a client. Server half is `server/`, owned by the server-panel
@@ -78,9 +78,9 @@ catalogue (`remote.py`, `catalog.py`, `index.search_union`), thumbnails
 that is the single-master decision, and `materialise.py` never imports
 `commit.py` because `Asset.new()` would mint a new one.
 
-**Nothing has been imported from the box yet.** Everything on it is also here
-with the same uuid, so the grid dedupes to `local` and no tile is blue. The
-file tier has never moved a byte. Next session's first job.
+**Proven end to end on 2026-09-13**, from a fresh copy on `J:` with an empty
+`library/`: all 75 arrived as cloud tiles, and an asset downloaded, verified and
+flipped from blue to local. Felix: "everything is working as intended."
 
 Also landed alongside it: first-run panel, *Create a new library…*, Desktop
 shortcut and icon, and `pythonw` launching with no console at all.
@@ -134,24 +134,19 @@ thing in front rather than the thing being deferred.
 
 ## Open bugs
 
-**Observed 2026-09-13:**
+**Open from 2026-09-13** (the cloud work; the rest of that session's list was
+closed by the J: run):
 
-- **A folder on J: that Explorer would not delete, by an app that was not
-  running.** `pythonw.exe` from `J:\Assets_library\runtime\` was still alive
-  twenty minutes after the window closed, holding its own folder open. Fixed in
-  `ui/netpool.py` (`stopping()` / `shutdown()`) and `app.closeEvent`, but **the
-  locked J: copy predates the fix** — kill the PID and delete it by hand before
-  re-copying. Gotcha 18.
-- **`run_ui.bat` is gone** and `CLAUDE.md` still lists it under *Run*. The
-  `.vbs` comment has been corrected; the doc has not.
 - **`_cache/` has no size budget.** Raised and deliberately deferred. Unbounded
-  growth on a portable drive, which is exactly where it will be used.
+  growth on a portable drive, which is exactly where it will be used. The
+  thumbnail cache already has the pattern to copy — `thumbs_budget_mb` plus an
+  LRU sweep in `ui/thumbcache.py`.
 - **Remote thumbnails are never re-fetched** (contract: uuid is the cache key).
   An asset re-imported on the box shows its old tile until
   `.assetlib/remote/thumbs/` is cleared by hand.
-- **Nothing visual in this session has been looked at.** Blue cloud tiles, the
-  cloud toggle, the first-run panel, the new-library dialog and the import
-  dialog are compile-checked only.
+- **Hero-LOD subsetting has only been exercised on constructed manifests.** The
+  fallback path — a slot with no file at the requested resolution takes the
+  nearest smaller — has not met a real Megascans package.
 
 **App, found 2026-09-12 by the new orphan check in `verify`:**
 
