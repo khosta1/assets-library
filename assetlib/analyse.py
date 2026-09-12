@@ -773,7 +773,7 @@ def _plan_texture_set(plan: ImportPlan, files, cfg, matcher: SlotMatcher) -> Non
         # about what a mesh is.
         if ext in cfg.geometry_ext:
             stem_no_lod, lod = split_lod(path.stem, cfg)
-            _, variant = split_variant(stem_no_lod, cfg)
+            _, variant = split_variant(stem_no_lod, cfg, plan.name)
             if (ext, lod, variant) in seen_geo:
                 where = f" for lod{lod}" if lod else ""
                 which = f" of variant {variant}" if variant else ""
@@ -853,7 +853,7 @@ def _plan_generic(plan: ImportPlan, files, cfg, matcher: SlotMatcher, strategy: 
             continue
         ext = path.suffix.lower()
         stem_no_lod, lod = split_lod(path.stem, cfg)
-        _, variant = split_variant(stem_no_lod, cfg)
+        _, variant = split_variant(stem_no_lod, cfg, plan.name)
 
         # Baked textures (.tex/.tx/.rat) are regenerable by definition - that
         # is what derived/ is for. Kept under their own names because nothing

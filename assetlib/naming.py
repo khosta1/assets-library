@@ -51,7 +51,7 @@ def split_lod(stem: str, cfg) -> tuple:
     return cleaned, int(found.group(1))
 
 
-def split_variant(stem: str, cfg) -> tuple:
+def split_variant(stem: str, cfg, asset_name: str = "") -> tuple:
     """'dactylisglomerata_hznoe_big' -> ('dactylisglomerata_hznoe', 'big').
 
     A variant is a SECOND version of the same asset that has to be KEPT, which
@@ -68,15 +68,34 @@ def split_variant(stem: str, cfg) -> tuple:
     is what settles it, because a token that looks like a variant but is part of
     the real name is the mistake a person catches at a glance and a pattern
     never will.
+
+    `asset_name` makes one class of that mistake catchable by the pattern after
+    all: a token already present in the asset's OWN name is part of the name.
+    "Large Fallen Tree" has one mesh and no small one - the tree is large, it is
+    not the large version of anything - yet `large` is a variant pattern, so the
+    file came out as `..._large.fbx` and asset.json claimed a variant dimension
+    that does not exist. Six of the 37 FabLibrary assets hit it: five `large`,
+    one `small`.
+
+    It does not weaken the case the rule exists for. Megascans ships
+    DactylisGlomerata_hznoe_Big and _Small, whose asset name is
+    `dactylisglomerata_hznoe` - neither word appears in it, so both stay
+    variants. And the check skips only the offending pattern, so an asset called
+    "Large Fallen Tree" that genuinely shipped a `_big` and a `_small` would
+    still have those detected.
     """
     patterns = cfg.naming.get("variant_patterns") or []
+    in_name = {t for t in re.split(r"[^a-z0-9]+", (asset_name or "").lower()) if t}
     for pattern in patterns:
         found = re.search(rf"(?:^|_)({pattern})(?=_|$)", stem, re.I)
         if not found:
             continue
+        token = found.group(1).lower()
+        if token in in_name:
+            continue
         cleaned = f"{stem[:found.start()]}_{stem[found.end():]}"
         cleaned = _REPEATS.sub("_", cleaned).strip("_")
-        return cleaned, found.group(1).lower()
+        return cleaned, token
     return stem, None
 
 

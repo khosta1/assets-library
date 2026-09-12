@@ -35,7 +35,9 @@
     },
     "Granite_Rock-68ea246b": {
       "type": "scan",
-      "category": "rock"
+      "category": "rock",
+      "skip": true,
+      "why": "699 MB raw 8K tier - not worth the shelf space"
     },
     "Granite_Rocks-da9190e9": {
       "type": "scan",

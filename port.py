@@ -110,6 +110,9 @@ def build_plan(cfg, root: Path, declarations: dict) -> dict:
         if not dec:
             skipped.append([folder.name, "NO DECLARATION - add one with `set`"])
             continue
+        if dec.get("skip"):
+            skipped.append([folder.name, dec.get("why") or "skipped by hand"])
+            continue
         plan = analyse.analyse(folder, cfg, type_hint=dec["type"],
                                category_hint=dec["category"])
         keep = [a for a in plan.actions if a.action == "keep"]
@@ -210,22 +213,50 @@ def cmd_next(args, cfg) -> None:
 
 
 def cmd_set(args, cfg) -> None:
-    plan = read_plan()
-    for entry in plan["assets"]:
-        if entry["folder"] != args.folder:
-            continue
-        if args.type:
-            entry["type"] = args.type
-        if args.category:
-            entry["category"] = args.category
-        if not cfg.valid_category(entry["type"], entry["category"]):
-            raise SystemExit(
-                f"{entry['category']!r} is not valid for {entry['type']!r}: "
-                + ", ".join(cfg.categories_for(entry["type"])))
-        PLAN.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+    """Amend one asset's DECLARATION, then rebuild the plan from it.
+
+    Writes to the declarations file, not to the plan. The plan is derived and
+    is regenerated on every `plan` run, so an amendment made there survives
+    until the next one and then silently vanishes - which is the worst failure
+    a migration can have, because the asset imports with the value you thought
+    you had changed.
+
+    `--skip` lives here rather than as a sixth subcommand: skipping IS a
+    declaration about an asset, and the decision recorded for this tool says
+    five subcommands and no more. A flag on the command that already edits
+    declarations is the honest place for it.
+    """
+    path = Path(args.declarations)
+    decl = json.loads(path.read_text(encoding="utf-8"))
+    entry = decl["assets"].get(args.folder)
+    if entry is None:
+        raise SystemExit(f"{args.folder} has no declaration")
+
+    if args.skip:
+        entry["skip"] = True
+        if args.why:
+            entry["why"] = args.why
+    if args.unskip:
+        entry.pop("skip", None)
+        entry.pop("why", None)
+    if args.type:
+        entry["type"] = args.type
+    if args.category:
+        entry["category"] = args.category
+    if not entry.get("skip") and not cfg.valid_category(entry["type"], entry["category"]):
+        raise SystemExit(
+            f"{entry['category']!r} is not valid for {entry['type']!r}: "
+            + ", ".join(cfg.categories_for(entry["type"])))
+
+    path.write_text(json.dumps(decl, indent=2), encoding="utf-8")
+    if entry.get("skip"):
+        print(f"{args.folder} -> SKIPPED ({entry.get('why') or 'by hand'})")
+    else:
         print(f"{args.folder} -> {entry['type']}/{entry['category']}")
-        return
-    raise SystemExit(f"{args.folder} is not in the plan")
+
+    plan = build_plan(cfg, Path(decl["root"]), decl["assets"])
+    PLAN.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+    print(f"plan rebuilt: {len(plan['assets'])} to import, {len(plan['skipped'])} skipped")
 
 
 def cmd_apply(args, cfg) -> None:
@@ -289,10 +320,14 @@ def main() -> int:
     p = sub.add_parser("next", help="show the next asset. Writes nothing.")
     p.set_defaults(fn=cmd_next)
 
-    p = sub.add_parser("set", help="amend one asset's declaration")
+    p = sub.add_parser("set", help="amend one asset's declaration, and replan")
     p.add_argument("folder")
+    p.add_argument("--declarations", default="port-declarations.json")
     p.add_argument("--type")
     p.add_argument("--category")
+    p.add_argument("--skip", action="store_true", help="do not import this one")
+    p.add_argument("--unskip", action="store_true")
+    p.add_argument("--why", help="note recorded beside a --skip")
     p.set_defaults(fn=cmd_set)
 
     p = sub.add_parser("apply", help="import one asset")
