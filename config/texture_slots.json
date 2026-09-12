@@ -228,10 +228,12 @@
     "_color_slots": "basecolor/emissive/specular - sRGB, jpg acceptable, png preferred."
   },
 
-  "discard_on_import": {
-    "_note": "Vendor-authored files that reference the ORIGINAL filenames and therefore break the moment we rename. We regenerate our own into derived/, so these are dropped rather than rewritten.",
+  "vendor_sidecars": {
+    "_note": "Vendor-authored material and scene files that reference the ORIGINAL filenames, which import renames - so they describe an arrangement of files that no longer exists. They are KEPT, verbatim, under extra/, and nothing in asset.json points at them.",
+    "_why_extra": "They were deleted outright until 2026-09-13. That contradicted invariant 6 - 'Nothing is discarded; what the library cannot interpret lands verbatim in extra/' - and the exception was never written down as one. extra/ is the honest place: preserved, because throwing away a vendor's authored material is not a decision this tool should take on its own, and unbound, because resolving one would hand an adapter texture paths that no longer resolve. Our own are still regenerated into derived/, and that is what an adapter reads.",
+    "_why_not_geo": "A .usd/.usda/.usdc is in geometry_ext, so without this branch it would route to geo/ and be BOUND as a representation - an adapter would load it and find every texture missing, which looks like our bug rather than the vendor's. This branch runs BEFORE the geometry branch, deliberately.",
     "extensions": [".mtlx", ".usd", ".usda", ".usdc", ".mtl"],
-    "keep_if": "asset type is not 'texture'"
+    "_scope": "Read by the texture-set planner only. The generic planner never consulted this list, so a .usd beside a MESH has always gone to geo/ and still does - there it is plausibly the asset itself rather than a sidecar describing one."
   },
 
   "preview_stems": ["thumbnail", "thumb", "preview", "render", "sphere", "screenshot", "asset_100", "asset_50"],

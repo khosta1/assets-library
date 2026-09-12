@@ -140,6 +140,11 @@ one.
   2026-08-21. Its real job was forcing the core to stay UI-free, and that is
   now an import rule instead. Every command it had exists in the window.
   Detail and the old command → menu mapping: `docs/History/cli-removed.md`.
-- **Vendor `.mtlx` / `.usdc` sidecars** — discarded at import, by design. They
-  reference the original filenames, which the import renames. Ours will be
-  generated into `derived/` instead. See `docs/decisions.md`.
+- **Vendor `.mtlx` / `.usd` / `.usdc` / `.mtl` sidecars** — **kept verbatim in
+  `extra/`, never bound** (changed 2026-09-13; they used to be deleted). They
+  reference the original filenames, which the import renames, so resolving one
+  would hand an adapter missing textures — but unusable is not worthless, and
+  deletion is the one outcome that cannot be undone. Nothing in `asset.json`
+  points at them, so no adapter can load one by accident. Ours are still
+  generated into `derived/`. `vendor_sidecars` in `texture_slots.json`; the
+  reasoning is in `docs/decisions.md` § Reversed.

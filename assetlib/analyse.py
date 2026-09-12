@@ -687,8 +687,8 @@ def _emit_slot_actions(plan: ImportPlan, candidates: dict, matcher: SlotMatcher)
 
 
 def _plan_texture_set(plan: ImportPlan, files, cfg, matcher: SlotMatcher) -> None:
-    discard = {
-        e.lower() for e in cfg.slots_cfg.get("discard_on_import", {}).get("extensions", [])
+    sidecars = {
+        e.lower() for e in cfg.slots_cfg.get("vendor_sidecars", {}).get("extensions", [])
     }
     derived = derived_exts(cfg.type_by_id[plan.type_id], cfg)
 
@@ -701,10 +701,21 @@ def _plan_texture_set(plan: ImportPlan, files, cfg, matcher: SlotMatcher) -> Non
         if _reject_junk(plan, path, size):
             continue
         ext = path.suffix.lower()
-        if ext in discard:
+        # Kept, not deleted. These reference the vendor's original filenames,
+        # which import renames, so they describe an arrangement of files that
+        # no longer exists - but that is a reason not to RESOLVE one, not a
+        # reason to throw it away. extra/ is where the library already puts
+        # what it will not interpret, and invariant 6 says nothing is
+        # discarded; deleting these was a standing exception to that which was
+        # never written down as one.
+        #
+        # Before the geometry branch on purpose: .usd/.usda/.usdc are in
+        # geometry_ext, so otherwise a sidecar would land in geo/ and be BOUND,
+        # and an adapter loading it would find every texture missing.
+        if ext in sidecars:
             plan.actions.append(
-                FileAction(path, "reject", size=size,
-                           reason="vendor-authored, references the original filenames - regenerated into derived/")
+                bonus_action(plan, path, size,
+                             "vendor-authored, references the original filenames")
             )
             continue
 

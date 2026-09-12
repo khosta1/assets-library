@@ -40,9 +40,10 @@ because an 8K HDR is ~400 MB as float32. Gotcha 11.
 this is duplicate detection rather than security. `blake2b` from the stdlib is
 the fallback, and the digest carries its algorithm as a prefix (gotcha 8).
 
-**USD** — the intended format for `derived/`. Vendor `.mtlx`/`.usdc` are
-discarded at import because they reference the original filenames; ours are to
-be generated after the rename.
+**USD** — the intended format for `derived/`. Vendor `.mtlx`/`.usdc` are kept
+verbatim in `extra/` and never bound, because they reference the original
+filenames and import renames them; ours are to be generated after the rename.
+Changed 2026-09-13 — they used to be deleted.
 
 ---
 

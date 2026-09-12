@@ -263,8 +263,9 @@ As of **2026-09-12**.
   second `mtlx_input` mapping, which is config. Maya, Blender and Unreal are
   `A3` and arrive the same way.
 - **`derived/` is empty.** USD and `.tx`/`.rat` generation is designed, not
-  built. Vendor `.mtlx`/`.usdc` are discarded at import because they reference
-  the original filenames; ours are not yet generated in their place.
+  built. Vendor `.mtlx`/`.usdc` are kept in `extra/` and never bound, because
+  they reference the original filenames; ours are not yet generated in their
+  place, so nothing an adapter reads is there at all.
 - **Dedup is a stub.** `index.find_by_hash()` exists and returns nothing. The
   hashes are already in `asset.json`, and `J:/3d` appears to be a FreeFileSync
   mirror of `H:/3D`, so much of the source data exists twice.
