@@ -63,8 +63,15 @@ class MainWindow(QMainWindow):
         self.add_btn.setToolTip("Declare one asset and drop its files in")
         self.add_btn.clicked.connect(self._add_asset)
 
+        self.batch_btn = QPushButton("Import folder…")
+        self.batch_btn.setToolTip(
+            "A vendor dump: one row per subfolder, one asset each.\n"
+            "For a single asset use Add.")
+        self.batch_btn.clicked.connect(self._batch_add)
+
         top = QHBoxLayout()
         top.addWidget(self.add_btn)
+        top.addWidget(self.batch_btn)
         top.addWidget(self.search, 1)
         top.addWidget(QLabel("size"))
         top.addWidget(self.zoom)
@@ -144,6 +151,11 @@ class MainWindow(QMainWindow):
         add.setShortcut("Ctrl+N")
         add.triggered.connect(self._add_asset)
         menu.addAction(add)
+        batch = QAction("Import a folder of assets…", self)
+        batch.setShortcut("Ctrl+Shift+N")
+        batch.setToolTip("One row per subfolder - for a vendor dump, not a single asset")
+        batch.triggered.connect(self._batch_add)
+        menu.addAction(batch)
         contents = QAction("Contents of selected…", self)
         contents.setShortcut("Ctrl+I")
         contents.triggered.connect(self._view_asset)
@@ -331,6 +343,17 @@ class MainWindow(QMainWindow):
             self._build_tree()
             self.refresh()
             self.statusBar().showMessage(f"added {dialog.added} asset(s)")
+
+    def _batch_add(self) -> None:
+        """Import a whole folder. Lazily imported, like Add and Edit."""
+        from .batch_add import BatchAddDialog
+
+        dialog = BatchAddDialog(self.cfg, self)
+        dialog.exec()
+        if dialog.added:
+            self._build_tree()
+            self.refresh()
+            self.statusBar().showMessage(f"imported {dialog.added} asset(s)")
 
     def _view_asset(self) -> None:
         """Look inside the package: every file, with what asset.json says it is."""
