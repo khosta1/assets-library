@@ -138,7 +138,6 @@ A **`folder_blob`** type - `script`, `terrain`, `garment`, `reference`, `setup`,
 library/script/houdini/manager_tool/
 ├─ asset.json
 ├─ src/            THE TREE, verbatim. Nothing renamed, slotted or contested.
-├─ toolbar/        generated at install, for a Houdini tool
 └─ preview/
 ```
 
@@ -245,9 +244,10 @@ Everything above, as the list to check a change against. `verify.py` enforces
     `script` type existed and became load-bearing when the cloud half landed:
     `materialise.py` downloads packages from the box, so a library that ran
     code an asset carried would make *downloading* an asset mean *running its
-    code*. A tool declares what it needs in `install.json`; `install.py`
-    decides what to do about it. A manifest field that cannot express something
-    is a new field and ten lines, never an escape hatch that runs anything.
+    code*. A tool declares what it needs in `install.json`, which is read as
+    data; nothing acts on it until a person asks. A manifest field that cannot
+    express something is a new field and ten lines, never an escape hatch that
+    runs anything.
 
     **The single exception is `launch.py`, and it is what the words "of its own
     accord" are doing there** (amended 2026-09-13, at Felix's instruction). A

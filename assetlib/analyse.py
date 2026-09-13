@@ -966,7 +966,7 @@ def _declared_icon(plan: ImportPlan, manifest: dict) -> None:
 
 
 def _record_tool(plan: ImportPlan, files, cfg) -> None:
-    """What this blob needs in order to be installed, if it is a tool.
+    """What this blob needs in order to be launched, if it is a tool.
 
     Two sources, and the order is the point. The tool author's own
     `install.json` wins, because they know which module is meant to be launched;
@@ -976,7 +976,7 @@ def _record_tool(plan: ImportPlan, files, cfg) -> None:
 
     Either way this is a PRE-FILL. The Add window shows the tags and the entry
     rows and the person keeps, edits or deletes them; `asset.json` is what
-    install.py reads afterwards. Neither a manifest nor a regex decides.
+    `launch.py` reads afterwards. Neither a manifest nor a regex decides.
     """
     from . import apps
 
@@ -1017,9 +1017,10 @@ def _record_tool(plan: ImportPlan, files, cfg) -> None:
         folders = sorted({Path(plan.rel(f)).parent.as_posix() for f in hdas})
         plan.warnings.append(
             f"{len(hdas)} digital asset(s) in {len(folders)} folder(s) - they "
-            f"travel with the package but are NOT put on Houdini's path. Add "
-            f"\"otls\" to {apps.MANIFEST} to install them, once you know they "
-            f"are yours to share.")
+            f"travel with the package but are NOT put on Houdini's path, and "
+            f"nothing here can put them there - HOUDINI_OTLSCAN_PATH is read "
+            f"once at startup. Declaring \"otls\" in {apps.MANIFEST} records "
+            f"where they are; loading them stays a manual step.")
     if len(proposed) > 1:
         # Said out loud because it is the number a person must reduce. Five
         # buttons for a suite with one launcher is the shape of the mistake.

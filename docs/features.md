@@ -13,11 +13,12 @@ REMOVED    deleted, listed so it does not get reinvented
 
 `ROADMAP.md` is what is being BUILT. This file is what EXISTS.
 
-Last brought in line: **2026-09-13**. **12 368 lines** - 10 816 in
-`assetlib`+`ui`, 1 552 in `houdini/` - and the library holds **111** assets,
-43.75 GB, the same 111 the box holds. `verify` warnings are the `.rat` strays
-and `smudgeslarge001` listed in `ROADMAP.md`. Two things counted here are NOT
-committed: `assetlib/derived.py` and its `build.py` hook.
+Last brought in line: **2026-09-13**. **14 392 lines** - 12 537 in
+`assetlib`+`ui`, 1 855 in `houdini/` - and the library holds **137** assets,
+44 GB. What the box holds has not been counted since it held 111; the
+difference is `B1` continuing. `verify` warnings are `smudgeslarge001` and the
+one vendor `.rat` listed in `ROADMAP.md`. Everything counted here is
+committed.
 
 ---
 

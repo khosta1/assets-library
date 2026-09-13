@@ -25,7 +25,10 @@ Two routes, and which one is available is a fact about the host:
 
 A Houdini tool has no third option: it imports `hou`, which exists only inside
 Houdini. Offering to launch one from the standalone window would produce an
-ImportError dressed as a broken asset, so it is not offered - Install is.
+ImportError dressed as a broken asset, so it is not offered, and nothing is
+offered in its place. Install used to be that second route - it worked from the
+standalone window because writing a package file needs no `hou` - and it is the
+one capability that went with it.
 """
 
 from __future__ import annotations

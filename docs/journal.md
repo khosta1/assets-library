@@ -4,7 +4,118 @@ Newest first.
 
 ---
 
-## 2026-09-13 (last) — derived/ stops being empty, and a progress bar that lied
+## 2026-09-13 (last) — a tool becomes an asset, and an installer lives one day
+
+Fifth entry today, and the whole of it is the `script` type: 18 commits from
+`812dc0e` to `23d8a50`, the last of which deletes a feature written eight
+commits earlier.
+
+**Done.**
+
+- **`script`/`tool`, the 18th root type** (`812dc0e`) — config only, seven
+  categories named after the app that runs it. Declared **last** of the real
+  types, because `.json` and `.xml` are the most generic extensions in the
+  registry and anything earlier would claim every Megascans folder off its
+  sidecar.
+- **`folder_blob` implemented** (`eaf5c5f`) — the source tree lands verbatim at
+  `src/<relative path>`: nothing renamed, slotted, contested or dropped. It was
+  declared in config on the previous commit and did not exist in `analyse.py`,
+  so every declared blob type was silently getting the texture-set treatment.
+  The `Manager_tool` suite went from *4 kept, 15 rejected* to *51 kept, 0
+  rejected*. `terrain`, `garment`, `reference`, `setup` and `unknown` were
+  fixed by the same function.
+- **App tags** (`bcee2f3`, `config/apps.json`) — `app:houdini`, `app:maya`,
+  `app:standalone`, detected from extensions, imported module names and folder
+  names. Tags and not the category, because a Python library used from both
+  Houdini and Maya is one asset with two targets and one folder.
+- **`install.json`, read as the prefill** (`c85dafb`) — the tool author's own
+  manifest wins over autodetect, because they know which module is meant to be
+  launched. Later gained an `icon` field (`328f96b`), so a tool can put its own
+  window icon on its tile.
+- **Launch** (`bb3d434`, `7566d6c`) — right-click, or double-click the tile.
+  Inside Houdini the library window *is* a Python Panel, so the module is
+  imported and called in that process: no install, no restart, nothing written
+  outside `library/`. The module and the call are shown before anything runs.
+- **The installer, built and retired the same day** (`1b12927`, `23d8a50`) —
+  see below.
+- **Five importer bugs**, all found by trying to import one real suite:
+  `extra/` doubling on every edit (`74c3290`); a dropped folder taking one
+  level instead of its tree (`c8dbe88`); plan paths taken from
+  `files[0].parent` instead of the common ancestor, which flattened the tree
+  and produced an asset containing only `install.json` (`f35b340`); a
+  declaration that names a file the package does not contain, now refused
+  up-front (`3deb4f0`); and `otls` inferred from finding `.hda` files, now
+  never inferred (`1a50024`).
+- **Transparent icons composite onto the tile ground** (`93ee536`) — Pillow's
+  `convert("RGB")` *drops* alpha rather than compositing it, so an icon drawn
+  on white-under-alpha arrived with white corners on a dark tile.
+
+**Decided.**
+
+- **The library never executes package content of its own accord** — invariant
+  15, written the day a `script` type existed (`66757cb`). It became
+  load-bearing immediately: `materialise.py` downloads packages from the box,
+  so a library that ran code an asset carried would make *downloading* an asset
+  mean *running its code*. `launch.py` is the **single exception**, and the
+  words "of its own accord" are what carry it: a person choosing Launch on a
+  named asset is that person running their own tool.
+- **`otls` is never inferred.** Declaring a folder of HDAs puts them on
+  Houdini's path *and* ships them onto a shared master for other people to
+  load. Whether a bundled `.hda` may be redistributed is its owner's decision,
+  not something an importer settles by noticing a file extension.
+- **Autodetect is weaker than it looks.** Scanning for a zero-argument `show()`
+  proposed **five** entry points for a suite with exactly one launcher, because
+  these tools do their work at module level. The manifest says one. Autodetect
+  stays as the fallback for a tool that ships no manifest, and it proposes,
+  never decides.
+- **Installing into Houdini is not how a tool is used here** — Felix: *"since
+  the houdini script and tools can be directly launched from the library get
+  rid of the installation part"*. Built at `1b12927`, removed at `23d8a50`,
+  eight commits and a few hours apart. Launch does the same job from inside a
+  Python Panel with no restart and nothing written outside `library/`. **The
+  one thing the installer could do that Launch cannot is put a tool's HDAs on
+  `HOUDINI_OTLSCAN_PATH`, which is read once at startup** — so the day someone
+  declares `otls`, that is the thing to reconsider, and it is the only
+  capability that distinguishes the two routes. Argument, both emitted file
+  shapes and what survived:
+  `docs/History/houdini-package-install-removed.md`.
+- `apps.unresolved()` moved to `apps.py` rather than going with the installer:
+  a manifest being honest is worth checking whether or not anything ever acts
+  on it. `otls` is still read into `asset.json` and consumed by nothing — the
+  honest state, and agreed with the `Manager_tool` session, because a field
+  that vanishes with its consumer is a field someone has to rediscover.
+
+**Open.** Nothing is half-written, and **nothing on either side has been run
+inside Houdini** — both halves are *emitted, parsed, unclicked*. The next real
+information comes from Felix opening the panel, not from more code.
+
+- **`refresh_from_source()` was never built** — step 7 of the script plan, the
+  copy-with-update half. A tool imported today is a snapshot; re-pulling from
+  the author's working folder has no button.
+- **The `Manager_tool` suite has still never imported successfully.** Every
+  attempt so far produced a broken asset, and each one found a different bug in
+  the list above. The bugs are fixed; the import has not been re-run.
+- **Three `reference/` assets were imported while `folder_blob` was declared
+  and unimplemented**, so they got the texture-set treatment and need
+  re-importing.
+- Carried forward from earlier today: `.tx` has a converter and no caller,
+  `.usda` is untouched, `derived/` and `_cache/` have no size budget,
+  `smudgeslarge001` needs re-importing, the Samba stanzas are not applied on
+  the box, and `sync.py` has still never *written* to a share.
+
+**Wrong turn worth keeping.** I reported four `sys.path.insert` lines in the
+suite as a hard blocker — "worse than a crash". They were inside module
+docstrings. The peer session challenged it, and it was wrong: I had grepped for
+the pattern and reported line numbers without reading what surrounded them. A
+grep hit is a location, not a fact.
+
+**Next.** Import `Manager_tool/suite` end to end with the five fixes in place —
+it is the only thing that has exercised any of this — then Felix in Houdini:
+open the panel, double-click the tile.
+
+---
+
+## 2026-09-13 — derived/ stops being empty, and a progress bar that lied
 
 Fourth entry today. `A2`, the re-index that closed the previous entry's *Next*,
 and a context-pack set that had quietly stopped describing the project.

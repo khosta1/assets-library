@@ -36,8 +36,11 @@ def _orphans(asset: Asset, asset_dir: Path, rel) -> list:
     # whole point is that the tool arrives unexamined, so naming all 51 files
     # of a suite in asset.json would be a manifest of something the library
     # deliberately does not interpret - and without this every one of them
-    # reports as an orphan. `toolbar/` joins it because it is GENERATED at
-    # install from the declaration, so nothing points at it either.
+    # reports as an orphan. `toolbar/` joins it for a different reason: the
+    # removed installer GENERATED one inside the package from the declaration,
+    # so an asset imported on the day it existed still carries a folder nothing
+    # points at. Nothing writes one any more - this stays so those packages do
+    # not start reporting warnings for a feature that is gone.
     unbound_tree = tuple(
         f"{d}/" for d in (asset.fields.get("tree"), "toolbar") if d
     )
@@ -161,8 +164,8 @@ def verify(cfg, deep: bool = False) -> list:
         # A tool's DECLARED paths, which the orphan check cannot see: it walks
         # files and asks whether something points at them, and this is the
         # opposite direction - a pointer with nothing under it. An asset whose
-        # shelf entry is missing installs cleanly and fails at the first click,
-        # a long way from the cause.
+        # shelf entry is missing imports cleanly and fails at the first
+        # launch, a long way from the cause.
         from .apps import unresolved
 
         for miss in unresolved(asset, asset_dir):

@@ -67,8 +67,8 @@ def unresolved(asset, asset_dir: Path) -> list:
     Written for the Houdini installer, which was removed the same day
     (`docs/History/houdini-package-install-removed.md`). It moved here rather
     than going with it: the check is about a manifest being honest, which is
-    this module's subject, and `verify` needs it whether anything installs or
-    not.
+    this module's subject, and that is worth checking whether or not anything
+    ever acts on the manifest.
     """
     asset_dir = Path(asset_dir)
     out = []
@@ -215,7 +215,7 @@ def from_manifest(data: dict, base: Path) -> dict:
 
     The manifest writes paths relative to ITSELF, because that is what the tool
     author can see; the library stores them relative to the package, which is
-    what `install.py` needs. That translation happens once, here, so neither
+    what `launch.py` needs. That translation happens once, here, so neither
     side has to think about the other's layout.
     """
     root = data.get("_root") or base
@@ -254,7 +254,7 @@ def entries(files, base: Path) -> list:
     Zero, one or many - a tool pack of five unrelated utilities gets five
     buttons and a library with no UI gets none. Proposed only: the Add window
     shows them as rows to keep, edit or delete, and `asset.json` is what
-    install.py reads afterwards. Scanning is how the rows are offered, never how
+    `launch.py` reads afterwards. Scanning is how the rows are offered, never how
     they are decided.
 
     A module is a candidate when it defines a zero-argument `show()`, `launch()`

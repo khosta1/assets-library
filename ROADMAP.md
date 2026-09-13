@@ -17,6 +17,10 @@
 - `B3` dedup in the UI — `index.find_by_hash()` is a stub; the hashes are
   already in every `asset.json`
 
+**Using the library**
+- `D1` script/tool handling — import, tag, launch. **Launch done 2026-09-13**;
+  copy-with-update (`refresh_from_source()`) not started. See Phase 5
+
 **Housekeeping**
 - `C1` verify the three unverified type signatures (see below)
 - `C2` git — **done 2026-09-11**
@@ -213,6 +217,48 @@ Order: `VaultCache` first — uniformly named, already the source every new
 dimension was built against, and every asset in it exercises resolutions,
 variants and LODs.
 
+### Phase 5 — `D1` script/tool handling — **Launch done 2026-09-13**
+
+A tool is not a texture set. `script` is the 18th root type (`812dc0e`) and the
+first `folder_blob`: the source tree lands verbatim at `src/`, because relative
+imports, `__init__.py`, `preset/*.json` and `HDAs/` all depend on their
+positions and flattening one breaks it.
+
+What exists:
+
+- **`folder_blob`** (`eaf5c5f`) — implemented in `analyse.py`, which also fixed
+  `terrain`, `garment`, `reference`, `setup` and `unknown`.
+- **App tags** (`bcee2f3`) — `app:houdini`, `app:maya`, `app:standalone`, from
+  `config/apps.json`. Tags and not the category: one tool can target two apps.
+- **`install.json`** (`c85dafb`, `328f96b`) — the tool author declares entry
+  points, `pythonpath`, `otls` and an icon. Read as **data, never executed**
+  (invariant 15). Autodetect is the fallback and proposes five entries for a
+  suite with one launcher, so the manifest wins wherever there is one.
+- **Launch** (`bb3d434`, `7566d6c`) — right-click or double-click. Inside
+  Houdini the window is a Python Panel, so the tool runs in that process.
+
+**Retired the same day it was built:** installing a tool as a Houdini package
+(`1b12927` → `23d8a50`). Launch does the job with no restart and nothing
+written outside `library/`. The one capability lost is HDAs via
+`HOUDINI_OTLSCAN_PATH`, which is read at **startup** — the trigger to
+reconsider is the day someone declares `otls`.
+`docs/History/houdini-package-install-removed.md`.
+
+**Still open on it:**
+
+- **Nothing has been run inside Houdini.** Emitted, parsed, unclicked — on this
+  side and on the `Manager_tool` side both. This is the next real information.
+- **`refresh_from_source()` does not exist.** A tool imported today is a
+  snapshot; re-pulling from the author's working folder has no button, and
+  copy-with-update was the reason the manifest records a source path at all.
+- **`Manager_tool/suite` has never imported successfully.** Five importer bugs
+  were found by trying; all five are fixed and the import has not been re-run.
+- **Three `reference/` assets** were imported while `folder_blob` was declared
+  and unimplemented, so they got the texture-set treatment. Re-import them.
+- **`otls` is read, stored, and consumed by nothing.** Deliberate, and agreed
+  with the `Manager_tool` session: the field being present-and-unused is the
+  honest state, and `verify` still checks the folder is there.
+
 ### What this order deliberately does not do
 
 It does not add more importers before something reads what has been imported.
@@ -251,11 +297,10 @@ push:
 - **The drop box has no promotion step.** A contributor can copy a package into
   `_inbox/` on the server; moving it into `library/` is a manual act with no
   tool behind it and no verification of what arrived.
-- **The `.rat` work is wired end to end and none of it is committed.**
-  `assetlib/derived.py`, the `build.py` hook, the *Use .rat textures* checkbox
-  in `import_houdini.py`, and `ui/bake.py` for the batch pre-bake. Not known to
-  have been run inside Houdini, so the 25 `.rat` strays in `tex/` are addressed
-  in code and not yet observed to stop appearing.
+- ~~**The `.rat` work is wired end to end and none of it is committed.**~~
+  Committed at `fb379c6` and confirmed working in Houdini by Felix the same
+  day; the 25 `.rat` strays in `tex/` and the 35 in `extra/` were deleted on
+  both sides afterwards (2.71 GB).
 - **The scan reads one `asset.json` per package over SMB, both sides.**
   Measured 2026-09-13: 1.6 s for 222 packages. It is linear, and at a few
   thousand it will not be.
