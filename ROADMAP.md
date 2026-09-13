@@ -278,6 +278,22 @@ thing in front rather than the thing being deferred.
 
 ## Open bugs
 
+**Open from 2026-09-13** (the launch work):
+
+- **A tool that never exits is never dropped from `_launched`.**
+  `ui/app.py:_watch_launch()` keeps a reference to each `Started` so `Popen` is
+  not collected while the tool is still starting, and removes it only if the
+  process has already exited when the 1.5 s check fires. A tool that runs for
+  an hour — which is every tool that works — stays in the list for the life of
+  the session. One `Popen` and one path each, so it is small and it is
+  unbounded, which is the same shape as every other cache in here with no
+  budget. Introduced knowingly today; the fix is a sweep of exited entries on
+  each new launch.
+- **Every launch writes to the same log path per asset.**
+  `assetlib-launch-<name>.log` in the temp folder, so launching one tool twice
+  overwrites the first one's output. Fine while the question is "did it die
+  just now", wrong the moment two instances run at once.
+
 **Open from 2026-09-13** (the cloud work; the rest of that session's list was
 closed by the J: run):
 

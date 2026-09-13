@@ -4,7 +4,102 @@ Newest first.
 
 ---
 
-## 2026-09-13 (last) — a tool becomes an asset, and an installer lives one day
+## 2026-09-13 (last) — clicked
+
+Sixth entry today, and the short version is three words: **it ran.** Both
+routes. A tkinter tool as a subprocess from the standalone window, and
+`main_ui` in-process inside Houdini, in the Python Panel's own session. Every
+entry before this one ends with some variation of *emitted, parsed, unclicked*.
+
+**Done.**
+
+- **`docs/tools.md`** (`21b75fd`) — the contract, written for the person who
+  wrote the tool rather than for someone reading this codebase. Three things to
+  get automatic handling, `install.json` field by field, what autodetect gets
+  you without one, and where each field lands in `asset.json`.
+- **`architecture.md` §7d, the tool join** (`21b75fd`, extended today) — the
+  pipeline end to end and the four rules holding it together: the tree is the
+  pointer, tags and not the category decide what a tool can do, declared beats
+  scanned and neither decides, and `otls` is read and consumed by nothing.
+- **`install.json` gained `python`** (`d754fd4`) — `apps.from_manifest` →
+  `analyse._record_tool` → `fields.python` → `launch._python()`.
+  `launch.in_host()` decides the route.
+- **The interpreter was carried and never read** (`362f742`) — `as_subprocess`
+  still resolved `sys.executable`; the edit meant to change it had silently
+  failed to apply inside a batch that reported success.
+- **A launch that dies is reported** (`362f742`) — child output to a log,
+  `launch.died()`, `ui/app.py:_watch_launch()` asking once 1.5 s later.
+- **`describe()` tells the truth about the route** (`362f742`) — it always said
+  `import <module>` then the call; a subprocess runs the whole FILE as
+  `__main__`, which for most of these tools is where the work is.
+- **The missing-module error names its own cause** (`5ac98b4`).
+- **`point_clean_tool` imported and launched** — `install.json` and a 512px
+  icon written into `H:/3D/Maya/Scripts/Point_clean_tool/Point_conversion_tool`,
+  which is the folder that is the tool.
+- **Gotchas 20 and 21** (`0772c93`), and both routes moved from claim to report
+  in `features.md` and `ROADMAP.md`.
+
+**Decided.**
+
+- **A declared interpreter is a bare name resolved on PATH**, never a stored
+  path, because the asset syncs to the master and an absolute path out of one
+  machine's AppData is wrong on every other.
+- **Declaring an interpreter also declares the route** — a tool naming one is a
+  tool saying *this process is the wrong one*, so it goes out of process even
+  inside Houdini. Separately correct: a tkinter mainloop would sit on the
+  thread Houdini needs.
+- **A launch is watched, not waited on.** A tool that works runs for an hour, so
+  blocking until it exits would freeze the window for exactly the launches that
+  went right.
+- **Import `Point_conversion_tool/`, not `Point_clean_tool/`.** The parent holds
+  369 MB of bundled CloudCompare whose README says it is not needed, and it
+  would have arrived broken anyway — `.exe` is in `JUNK_EXTS`, so the executable
+  is rejected and 196 DLLs kept.
+- Two rejected, both in `decisions.md`: **falling back to a system Python
+  automatically** when the runtime cannot import something, and **giving the
+  tool a `show()`** so both routes work uniformly. The second opens two windows.
+
+**Open.**
+
+Nothing is half-written; the tree is clean and every commit above is in. What
+is genuinely open:
+
+- ~~**The note to the `Manager_tool` session was never delivered**~~ — that
+  session had already closed, so it went by hand instead:
+  `H:/3D/Maya/Scripts/Manager_tool/docs/library-side.md`, rewritten as a
+  document for whoever opens that repo next rather than as the message it was
+  meant to be. It carries the in-process confirmation, both bugs, why they
+  should *not* declare `python` for `suite` (it would route `main_ui` out of
+  the panel), and that `otls`/C3 is unchanged. **Uncommitted there**, and that
+  repo has its own uncommitted work from its closed session — do not sweep them
+  up together. Nothing in their `CLAUDE.md` points at the new file, so it is
+  found by looking in `docs/`, not by being routed to.
+- **Two defects introduced knowingly today**, both now in *Open bugs*: a tool
+  that never exits is never dropped from `_launched`, and every launch of one
+  asset writes the same log path.
+- **`refresh_from_source()` still does not exist** — step 7 of the original
+  script plan, the copy-with-update half. A tool imported today is a snapshot.
+- Carried: three `reference/` assets imported under the broken `folder_blob`
+  need re-importing, `.tx` has a converter and no caller, `.usda` untouched,
+  `derived/` and `_cache/` have no size budget, `smudgeslarge001` needs
+  re-importing, Samba stanzas not applied on the box, `sync.py` has still never
+  *written* to a share.
+
+**Wrong turn worth keeping.** A batch of four string replacements reported
+`COMPILE-OK` and I read that as four applied. The third had aborted the script;
+the fourth — the one wiring the interpreter into `as_subprocess` — never ran at
+all. Everything downstream looked correct because everything downstream *was*
+correct. Compiling is not applying, and a batch that stops half-way is worse
+than one that fails, because the half that landed makes the other half look
+plausible.
+
+**Next.** `refresh_from_source()` — the last unbuilt piece of the script plan,
+and the one that stops a tool asset being a snapshot. Now worth doing, because
+launching one is no longer theoretical.
+
+---
+
+## 2026-09-13 — a tool becomes an asset, and an installer lives one day
 
 Fifth entry today, and the whole of it is the `script` type: 18 commits from
 `812dc0e` to `23d8a50`, the last of which deletes a feature written eight

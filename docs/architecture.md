@@ -458,6 +458,32 @@ this is not our process: it has thousands of modules loaded and is not ours to
 reorder, and a tool's folder shadowing a host or stdlib module would be a
 failure with no visible cause.
 
+### Three routes, and the tool gets a say in which
+
+```
+inside Houdini        import the module and call it, in this process
+standalone app        a subprocess in the bundled runtime
+declares `python`     a subprocess in THAT interpreter, host or not
+```
+
+The third was added **2026-09-13**, an hour after the first launch worked,
+because the bundled runtime is not a general Python: it carries this project's
+own imports and no tcl/tk at all, so a tkinter tool cannot run in it (gotcha
+21). `install.json` names an interpreter, `launch._python()` resolves it — a
+**bare name on PATH**, not a stored path, because the asset syncs to the master
+and an absolute path out of one machine is wrong on every other.
+
+**RULE.** Declaring an interpreter also declares the route. A tool naming one
+is a tool saying *this process is the wrong one*, so `launch.in_host()` sends
+it out of process even inside Houdini — which is separately correct, since a
+tkinter mainloop would sit on the thread Houdini needs.
+
+**Both routes were confirmed the day they were written**, and each cost a bug
+that only a person pressing the button could find: a field carried through
+three modules into `asset.json` and then never read, and a subprocess that died
+on its first import reported as a success because `Popen` had returned
+(gotchas 20 and 21).
+
 ---
 
 ## 8. Where the seams are
