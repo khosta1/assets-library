@@ -25,6 +25,7 @@ between the layers, marks design rules **RULE**, and ends with the
 | `docs/journal.md` | one dated entry per session |
 | `docs/sources.md` | vendor conventions and the formats they ship |
 | `docs/porting.md` | **how to run a bulk import** — `port.py`, the procedure, the traps |
+| `docs/tools.md` | **what a tool must look like** to be imported, tagged and launched — written for the tool's author |
 | `ROADMAP.md` | what is being built next, and the open bugs |
 
 ## The code

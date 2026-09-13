@@ -92,9 +92,12 @@ information comes from Felix opening the panel, not from more code.
 - **`refresh_from_source()` was never built** — step 7 of the script plan, the
   copy-with-update half. A tool imported today is a snapshot; re-pulling from
   the author's working folder has no button.
-- **The `Manager_tool` suite has still never imported successfully.** Every
-  attempt so far produced a broken asset, and each one found a different bug in
-  the list above. The bugs are fixed; the import has not been re-run.
+- ~~**The `Manager_tool` suite has still never imported successfully.**~~
+  **It has** - corrected within the hour, by looking instead of remembering.
+  `library/script/houdini/main_ui` holds 61 files, every declared path
+  resolves, and the icon rendered. Several earlier attempts produced broken
+  assets and each found a different bug in the list above; the attempt after
+  the fixes worked, and I wrote the entry from the failures.
 - **Three `reference/` assets were imported while `folder_blob` was declared
   and unimplemented**, so they got the texture-set treatment and need
   re-importing.
@@ -109,9 +112,14 @@ docstrings. The peer session challenged it, and it was wrong: I had grepped for
 the pattern and reported line numbers without reading what surrounded them. A
 grep hit is a location, not a fact.
 
-**Next.** Import `Manager_tool/suite` end to end with the five fixes in place —
-it is the only thing that has exercised any of this — then Felix in Houdini:
-open the panel, double-click the tile.
+**Next.** Felix in Houdini: open the panel, double-click the `main_ui` tile.
+The asset exists and is sound on disk; what has never happened is a launch.
+
+**Written after the entry.** `docs/tools.md` — the author-facing contract, so a
+tool can be made importable without reading `analyse.py` — and
+`architecture.md` §7d, the join: the tree is the pointer, tags decide what a
+tool can do, declared beats scanned and neither decides, and the one thing that
+does not work is a fact about when Houdini reads `HOUDINI_OTLSCAN_PATH`.
 
 ---
 

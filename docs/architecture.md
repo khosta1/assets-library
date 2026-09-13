@@ -176,6 +176,11 @@ downstream reads.
             asset.json, generates the icon, indexes.
 ```
 
+Step 4 branches on the type's `ingest` strategy. Five of the six sort and
+rename; **`folder_blob` does neither** — it copies the tree verbatim into `src/`
+and reads a manifest if one is there. That is §7d, and it is the only branch
+where the library keeps names it did not choose.
+
 The user declares what an asset **is**; the tool decides where its files go.
 Type, category and name are typed in — never inferred and silently committed.
 What is automated is the tedious half: which image is the basecolor, which
@@ -332,6 +337,126 @@ the share to find out whether `smbd` allows it; Samba's `write list` is the
 gate, and the app reports its answer rather than keeping a flag of its own. The
 add-only path for everyone else is a second, writable share used as a drop box
 — a share definition rather than a rule this app is trusted to keep.
+
+---
+
+## 7d. The tool join
+
+Added **2026-09-13**. Author-facing detail — what a tool must look like — is
+`docs/tools.md`; this is the join.
+
+> **A tool is the first asset the library does not merely store. A rock is
+> finished when it is in the tree; a tool is finished when it can be run.**
+
+That one difference is what every part of this section exists to serve, and it
+is served without giving up anything the rest of the design rests on: the tree
+is still owned, the manifest is still data, and nothing under `library/` runs
+unless a person asks for it by name.
+
+### The pipeline, end to end
+
+```
+YOUR FOLDER            analyse.py                 asset.json          launch.py
+─────────────────────  ─────────────────────────  ──────────────────  ──────────
+install.json ────────▶ read_manifest()  ─┐
+  (shallowest wins)    from_manifest()   │
+                                         ├──────▶ fields.shelf ─────▶ entries()
+no manifest? ────────▶ apps.entries()   ─┘        fields.pythonpath ▶ search_paths()
+  scan for show()      apps.detect()    ──────▶  tags app:*  ───────▶ launchable()
+                                                  fields.otls ──────▶ nothing (§7d.4)
+every file ──────────▶ _plan_blob()     ──────▶  src/<path>, verbatim
+your icon ───────────▶ _declared_icon() ──────▶  preview/thumb.jpg
+```
+
+Four rules hold it together, and each one is a place the obvious design is
+wrong.
+
+### 1. The tree is the pointer
+
+`folder_blob` copies the source verbatim into `src/` and records
+`fields.tree = "src"`. Nothing is renamed, slotted, contested or dropped,
+because for a tool the tree is not decoration — relative imports, `__init__.py`
+and `preset/*.json` all depend on their positions.
+
+This is the one shape where **the pointer is the TREE rather than a file each**
+(invariant 14). `verify`'s orphan check knows it: naming all 61 files of a
+suite in `asset.json` would be a manifest of something the library deliberately
+does not interpret.
+
+The type must declare it. Six do — `script`, `terrain`, `garment`, `reference`,
+`setup`, `unknown` — and all six were silently getting the texture-set
+treatment until it was implemented (2026-09-13).
+
+### 2. Tags, not category, decide what a tool can do
+
+The category is one folder and stays the primary app. The **tags** are many,
+because a Python library used from both Houdini and Maya is one asset with two
+targets and one folder. `config/apps.json` holds the per-app detection;
+`apps.detect()` reads it.
+
+What the tags decide is whether Launch is offered **off-host**: a tool tagged
+`app:houdini` imports `hou`, so launching it from the standalone window would
+raise an `ImportError` that reads as a broken asset. `launch.launchable()` is
+that test, and it is the only thing standing between a correct refusal and a
+confusing failure.
+
+Detection matches folder names **against the path inside the asset**, never the
+absolute one. Matching the full path tagged every tool under
+`…/Maya/Scripts/` as `app:maya`, on the strength of where Felix keeps his
+scripts.
+
+### 3. Declared beats scanned, and neither one decides
+
+`install.json` is the tool author's own declaration and wins wherever it
+exists, because the person who wrote the tool knows which module is meant to be
+launched and a regex looking for `def show()` does not — scanning a ten-tool
+suite proposed **five** entry points when exactly one was meant to be called.
+
+**Both are still a PRE-FILL.** The Add window shows the tags as chips and the
+entries as rows, and a person keeps, edits or deletes them. This is the same
+rule as `variant_patterns` and `guess_category` (§6), applied to a new kind of
+guess.
+
+The manifest writes paths relative to **itself**, because that is the layout its
+author can see; `from_manifest()` rewrites them relative to the package, and
+`_record_tool()` adds the `src/` hop. That translation happens once, in one
+place, so neither side has to think about the other's layout.
+
+**RULE.** `otls` is never inferred, only declared. Declaring a folder of HDAs
+both puts them on Houdini's path and ships them onto a shared master for other
+people to load; whether a bundled `.hda` may be redistributed is its owner's
+decision, not something an importer settles by noticing a file extension.
+
+### 4. The one thing that does not work, and why it is a fact about Houdini
+
+`fields.otls` is read, stored, and consumed by nothing.
+**`HOUDINI_OTLSCAN_PATH` is read once, at startup**, so an in-process launch
+cannot put a tool's HDAs on it. Only a package file could, and the package
+installer was removed on the day it was written
+(`docs/History/houdini-package-install-removed.md`).
+
+It is the single capability that distinguished the two routes, which is the
+thing to remember when the question comes back: the trigger to reconsider is
+the day someone declares `otls`.
+
+### The exception that is named in the invariants
+
+Launch executes package content. Invariant 15 says the library never does that
+**of its own accord**, and those four words are the whole of it: a person
+choosing Launch on a named asset is that person running their own tool, one
+step shorter than *Open folder* and double-clicking it themselves.
+
+It matters more than it looks because of §7c. The box is the master and
+`materialise.py` downloads packages from it, so a library that ran code an
+asset carried would turn *downloading a tool* into *running it*. The bounds —
+menu-only, shown and confirmed first, not offered off-host, failures attributed
+to the tool — are listed with the invariant and are what keep the exception an
+exception.
+
+**RULE.** `sys.path` is **appended to, never inserted at 0**. Inside Houdini
+this is not our process: it has thousands of modules loaded and is not ours to
+reorder, and a tool's folder shadowing a host or stdlib module would be a
+failure with no visible cause.
 
 ---
 

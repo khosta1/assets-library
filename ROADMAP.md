@@ -251,8 +251,11 @@ reconsider is the day someone declares `otls`.
 - **`refresh_from_source()` does not exist.** A tool imported today is a
   snapshot; re-pulling from the author's working folder has no button, and
   copy-with-update was the reason the manifest records a source path at all.
-- **`Manager_tool/suite` has never imported successfully.** Five importer bugs
-  were found by trying; all five are fixed and the import has not been re-run.
+- ~~**`Manager_tool/suite` has never imported successfully.**~~ **Imported
+  2026-09-13** as `library/script/houdini/main_ui` - 61 files, one shelf entry,
+  four `pythonpath` folders, all resolving. It is the only script asset in the
+  library and the only thing that has exercised any of this end to end. What
+  has still never happened is a LAUNCH.
 - **Three `reference/` assets** were imported while `folder_blob` was declared
   and unimplemented, so they got the texture-set treatment. Re-import them.
 - **`otls` is read, stored, and consumed by nothing.** Deliberate, and agreed
