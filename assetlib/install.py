@@ -82,6 +82,30 @@ def package_path(pref_dir: Path, asset_name: str) -> Path:
     return Path(pref_dir) / PACKAGES / f"{asset_name}.json"
 
 
+def unresolved(asset, asset_dir: Path) -> list:
+    """Declared paths that are not in the package. Empty when the asset is sound.
+
+    A manifest is written by hand against a source tree, and what gets imported
+    is a choice made later in the Add window - so the two can disagree, and
+    nothing noticed. Checked here AND by `verify`, because an asset can go
+    wrong long after it was installed: an edit that drops a file leaves the
+    declaration pointing at nothing.
+    """
+    asset_dir = Path(asset_dir)
+    out = []
+    for item in asset.fields.get("shelf") or []:
+        entry = (item.get("entry") or "").strip()
+        if entry and not (asset_dir / entry).is_file():
+            out.append(f"shelf entry: {entry}")
+    for rel in asset.fields.get("otls") or []:
+        if rel and not (asset_dir / rel).is_dir():
+            out.append(f"otls: {rel}")
+    for rel in asset.fields.get("pythonpath") or []:
+        if rel and not (asset_dir / rel).is_dir():
+            out.append(f"pythonpath: {rel}")
+    return out
+
+
 def installed_in(cfg, asset_name: str, app: str = "houdini") -> list:
     """Every pref dir that currently holds a package for this asset."""
     return [d for d in pref_dirs(cfg, app)
@@ -177,6 +201,19 @@ def install(cfg, asset, asset_dir: Path, pref_dir: Path,
     asset_dir = Path(asset_dir)
     shelf = list(asset.fields.get("shelf") or [])
     otls = list(asset.fields.get("otls") or [])
+
+    missing = unresolved(asset, asset_dir)
+    if missing:
+        # Refused, not warned. A manifest names paths and nothing had checked
+        # that they exist, so importing a folder holding only install.json
+        # produced an asset with no code, a generated shelf for a module that
+        # is not there, and a package installed in Houdini - every step
+        # succeeding and the result useless. The failure would have surfaced as
+        # an ImportError on the first click, a long way from its cause.
+        raise InstallError(
+            "this asset declares paths that are not in the package:\n  "
+            + "\n  ".join(missing)
+            + "\n\nRe-import it with the files the manifest describes.")
 
     written = []
     xml = shelf_xml(asset.name, shelf)

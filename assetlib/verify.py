@@ -32,6 +32,16 @@ def _orphans(asset: Asset, asset_dir: Path, rel) -> list:
     a real defect, but nothing is broken or unreadable because of it and the
     file itself is intact.
     """
+    # A folder_blob's pointer is the TREE, not a file each (invariant 14). Its
+    # whole point is that the tool arrives unexamined, so naming all 51 files
+    # of a suite in asset.json would be a manifest of something the library
+    # deliberately does not interpret - and without this every one of them
+    # reports as an orphan. `toolbar/` joins it because it is GENERATED at
+    # install from the declaration, so nothing points at it either.
+    unbound_tree = tuple(
+        f"{d}/" for d in (asset.fields.get("tree"), "toolbar") if d
+    )
+
     table = roles(asset)
     bound = set(table)
     for relpath in list(table):
@@ -52,6 +62,8 @@ def _orphans(asset: Asset, asset_dir: Path, rel) -> list:
             continue
         inside = path.relative_to(asset_dir).as_posix()
         if inside in bound or inside.startswith(UNBOUND_DIRS):
+            continue
+        if inside.startswith(unbound_tree):
             continue
         out.append(("warn", str(rel), f"nothing in asset.json points at {inside}"))
     return out
@@ -145,6 +157,17 @@ def verify(cfg, deep: bool = False) -> list:
                                  f"{label} points at missing file(s): {shown}"))
 
         problems.extend(_orphans(asset, asset_dir, rel))
+
+        # A tool's DECLARED paths, which the orphan check cannot see: it walks
+        # files and asks whether something points at them, and this is the
+        # opposite direction - a pointer with nothing under it. An asset whose
+        # shelf entry is missing installs cleanly and fails at the first click,
+        # a long way from the cause.
+        from .install import unresolved
+
+        for miss in unresolved(asset, asset_dir):
+            problems.append(("error", str(rel), f"declares a path that is not "
+                                                f"in the package - {miss}"))
 
         if deep:
             for relpath, expected in asset.hashes.items():
