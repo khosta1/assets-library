@@ -1265,26 +1265,40 @@ def karma_component(asset: Asset, asset_dir: Path, cfg, opts: dict | None = None
     if opts.get("localize"):
         asset_dir = _localize(asset, asset_dir, cfg)
 
-    # Bake BEFORE the first node exists, with a window on it. Doing it inside
-    # textures_for() worked and froze Houdini for up to half a minute on a raw
-    # 8K scan, with nothing on screen saying why. Here the conversion runs on a
-    # pool thread - derived.py is subprocesses and imports no hou, so that is
-    # safe - while the main thread pumps events and stays interactive.
+    def _build():
+        return _build_all(asset, asset_dir, cfg, opts)
+
+    # Bake first, then build - and when anything has to be baked, RETURN TO
+    # HOUDINI in between. The conversion runs on a pool thread and the nodes
+    # are made from an idle callback once it finishes.
     #
-    # After this, textures_for() finds every bake current and binds it without
-    # converting anything itself. Silent and instant when there is nothing to
-    # do, which is every build after the first.
+    # An earlier version baked here on the main thread behind a progress bar
+    # that pumped Qt events. The bar animated and Houdini still froze, because
+    # Qt's events are not Houdini's: its event loop cannot run while a Python
+    # script is on the main thread, and pumping Qt does not hand control back.
+    # Only returning does.
+    #
+    # The consequence is real and is not hidden: a build that had to bake
+    # returns None, because the nodes do not exist yet.
     try:
-        from .bakewindow import bake_first
+        from .bakewindow import run_when_baked
 
-        bake_first(asset, asset_dir, opts)
+        return run_when_baked(asset, asset_dir, opts, _build)
     except Exception as exc:                            # noqa: BLE001
-        # A progress window is not worth failing an import over. Without it,
-        # textures_for() still bakes inline exactly as before - slower and
-        # silent, but correct.
-        print(f"[assetlib] pre-bake window unavailable ({exc}); "
-              "converting inline instead")
+        # Any failure in the deferring machinery falls back to the old
+        # behaviour: bake inline inside textures_for() and build now. Slower
+        # and it blocks, but it is correct and it returns nodes.
+        print(f"[assetlib] deferred bake unavailable ({exc}); building inline")
+        return _build()
 
+
+def _build_all(asset: Asset, asset_dir: Path, cfg, opts: dict) -> list:
+    """The build itself, with every texture assumed already baked.
+
+    Split out so it can be called either directly or from an idle callback.
+    Everything here touches `hou` and therefore only ever runs on the main
+    thread.
+    """
     textures = textures_for(asset, asset_dir, cfg, opts)
     built = []
     for variant, geo in geometry_for(asset, asset_dir, opts):

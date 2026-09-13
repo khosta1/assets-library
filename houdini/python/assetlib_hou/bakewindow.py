@@ -1,29 +1,35 @@
-"""A small window that converts textures while Houdini stays usable.
+"""Convert textures without freezing Houdini, then build.
 
-The problem it solves: baking at build time froze Houdini. `iconvert` takes
-~1 s on a 2K map and ~5 s on an 8K one, so the first import of a raw 8K scan
-with seven maps locked the application for half a minute with nothing on screen
-explaining why.
+The first attempt at this blocked the main thread in a
+`while not done: QApplication.processEvents()` loop. The progress bar animated
+and **Houdini still froze**, which is the useful failure: `processEvents` pumps
+*Qt widget* events, so this module's own dialog repainted, while Houdini's
+viewport, cook and UI are driven by Houdini's event loop - and that loop cannot
+run while a Python script is still on the main thread. Pumping Qt from inside a
+script does not hand control back; only returning does.
 
-**Why this works rather than merely looking like it does.** The conversion is a
-*subprocess*, and `assetlib.derived` imports no `hou`, so it is safe to run off
-Houdini's main thread. The worker does the converting; the main thread does
-nothing but pump events. Houdini is genuinely interactive - the viewport pans,
-menus open - because the work is not on its thread, not because the wait has
-been hidden.
+So the shape is inverted. Nothing waits:
 
-What it is NOT is fire-and-forget. `karma_component()` returns the nodes it
-built, and it cannot do that before the textures exist. So this blocks the
-CALLER while leaving the APPLICATION responsive, which is the honest shape:
-the import finishes when the bake finishes, and you can look around meanwhile.
+    needs baking?  no  -> build now, return the nodes, exactly as before
+                   yes -> start the worker, show the window, RETURN to Houdini,
+                          and build from an idle callback when it finishes
 
-Qt, not `hou.ui`: a progress window with a cancel button is a widget, and
-Houdini's Python already has one of the two PySide bindings loaded.
+`hou.ui.addEventLoopCallback` is Houdini's own mechanism for this - "called
+whenever Houdini's event loop is idle, approximately every 50 ms". Because the
+script has returned, that loop is running, and Houdini is genuinely usable
+rather than merely repainting one dialog.
+
+The cost is a real contract change: an import that has to bake returns **no
+nodes**, because they do not exist yet. The caller says "building…" instead of
+counting them. That is honest, and the alternative - pretending to be
+synchronous - is what produced a frozen application with a working progress bar.
+
+Node creation always happens on the main thread: the worker only ever runs
+subprocesses, and `assetlib.derived` imports no `hou`.
 """
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 try:                                        # Houdini 20.5+ ships Qt6
@@ -31,17 +37,18 @@ try:                                        # Houdini 20.5+ ships Qt6
 except ImportError:                         # older builds ship Qt5
     from PySide2 import QtCore, QtWidgets   # type: ignore
 
+import hou
+
 from assetlib import derived
 from assetlib.model import expand
-
-POLL_MS = 30
 
 
 def pending(asset, asset_dir: Path, rels, fmt: str = derived.DEFAULT_FORMAT) -> list:
     """The textures of this build that have no current bake yet.
 
     Asked before anything is shown, so an asset that is already baked opens no
-    window at all - which is every build after the first, and the common case.
+    window and takes the fully synchronous path - which is every build after
+    the first, and the common case.
     """
     todo = []
     for rel in rels:
@@ -63,10 +70,12 @@ def pending(asset, asset_dir: Path, rels, fmt: str = derived.DEFAULT_FORMAT) -> 
 
 class _Signals(QtCore.QObject):
     step = QtCore.Signal(int, str)
-    done = QtCore.Signal(list)              # rels that failed
+    done = QtCore.Signal(list)
 
 
 class _Worker(QtCore.QRunnable):
+    """Subprocesses only. Touches no `hou` call and creates no node."""
+
     def __init__(self, asset, asset_dir, rels, fmt, signals):
         super().__init__()
         self.asset, self.asset_dir = asset, asset_dir
@@ -90,19 +99,19 @@ class _Worker(QtCore.QRunnable):
 
 
 class BakeProgress(QtWidgets.QDialog):
-    """Modeless on purpose - a modal dialog would block the very input this exists to preserve."""
+    """Modeless, always-on-top. Modal would block the input this exists to preserve."""
 
-    def __init__(self, name: str, count: int, parent=None):
-        super().__init__(parent)
+    def __init__(self, name: str, count: int):
+        super().__init__(hou.qt.mainWindow() if hasattr(hou, "qt") else None)
         self.setWindowTitle("Preparing textures")
         self.setWindowFlags(QtCore.Qt.Tool | QtCore.Qt.WindowStaysOnTopHint)
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(430)
         self.cancelled = False
 
         self.label = QtWidgets.QLabel(
             f"Baking {count} texture(s) for <b>{name}</b> into "
             "<code>derived/</code>.<br>"
-            "Houdini stays usable — the nodes appear when this finishes.")
+            "Carry on working — the nodes are built when this finishes.")
         self.label.setWordWrap(True)
 
         self.bar = QtWidgets.QProgressBar()
@@ -110,7 +119,7 @@ class BakeProgress(QtWidgets.QDialog):
         self.current = QtWidgets.QLabel("")
 
         stop = QtWidgets.QPushButton("Skip baking")
-        stop.setToolTip("Stop converting and build now, using the source "
+        stop.setToolTip("Stop converting and build now from the source "
                         "textures. Anything already baked is kept.")
         stop.clicked.connect(self._stop)
 
@@ -126,46 +135,44 @@ class BakeProgress(QtWidgets.QDialog):
 
     def _stop(self):
         self.cancelled = True
-        self.current.setText("stopping…")
+        self.current.setText("stopping — the build will use the source textures")
 
     def closeEvent(self, event):
-        # Closing the window means the same as pressing the button. It must not
-        # mean "carry on invisibly": a conversion nobody can see or stop is the
-        # thing that made a frozen Houdini frightening rather than merely slow.
+        # Closing means the same as Skip. A conversion nobody can see or stop
+        # is what made the frozen version frightening rather than merely slow.
         self.cancelled = True
         super().closeEvent(event)
 
 
-def bake_first(asset, asset_dir: Path, opts: dict,
-               fmt: str = derived.DEFAULT_FORMAT) -> None:
-    """Convert what this build needs, showing progress, before any node is made.
+def run_when_baked(asset, asset_dir: Path, opts: dict, build_fn,
+                   fmt: str = derived.DEFAULT_FORMAT):
+    """Bake what this build needs, then call `build_fn()`.
 
-    Returns when the bakes are done, skipped or cancelled. `textures_for()`
-    afterwards finds them current and binds them without converting anything
-    itself, so the slow path runs here, once, with a window on it.
-
-    Silent and instant when there is nothing to do, which is every build after
-    the first.
+    Returns `build_fn()`'s result when nothing had to be baked, and `None` when
+    the build was deferred to an idle callback. A caller that needs to report
+    what happened must handle both - see `import_houdini.send()`.
     """
     opts = opts or {}
-    if not opts.get("derived", True) or not opts.get("bake", True):
-        return
-    if not derived.available(fmt):
-        return
+    rels = list(_texture_rels(asset, opts).values())
 
-    rels = list(texture_rels_for(asset, opts).values())
-    todo = pending(asset, asset_dir, rels, fmt)
+    wanted = (opts.get("derived", True) and opts.get("bake", True)
+              and derived.available(fmt))
+    todo = pending(asset, asset_dir, rels, fmt) if wanted else []
+
     if not todo:
-        return
+        return build_fn()
 
     app = QtWidgets.QApplication.instance()
-    if app is None:                         # no Qt loop: convert quietly
+    has_loop = app is not None and hasattr(hou, "ui")
+    if not has_loop:
+        # hython, or a Houdini without a UI. Convert inline - there is no event
+        # loop to hand control back to, and nobody is watching a viewport.
         for rel in todo:
             if "<UDIM>" in rel:
                 derived.ensure_udim(asset, asset_dir, rel, fmt)
             else:
                 derived.ensure(asset_dir, rel, fmt)
-        return
+        return build_fn()
 
     win = BakeProgress(asset.name, len(todo))
     signals = _Signals()
@@ -173,36 +180,51 @@ def bake_first(asset, asset_dir: Path, opts: dict,
 
     signals.step.connect(lambda i, n: (win.bar.setValue(i),
                                        win.current.setText(n)))
-
-    def finished(failed):
-        state["failed"] = failed
-        state["done"] = True
-
-    signals.done.connect(finished)
+    signals.done.connect(lambda failed: state.update(done=True, failed=failed))
 
     worker = _Worker(asset, asset_dir, todo, fmt, signals)
-    win.show()
-    QtCore.QThreadPool.globalInstance().start(worker)
+    # Held on the state dict: a QRunnable with autoDelete is owned by the pool,
+    # but the signals object is not, and if it is collected the callback never
+    # fires - the classic threadpool mistake in Qt.
+    state["signals"] = signals
 
-    # The main thread pumps events and nothing else. This is what keeps Houdini
-    # alive; the converting is happening on the pool thread. ExcludeUserInput is
-    # deliberately NOT passed - being able to use Houdini is the entire point -
-    # but `worker.stop` is the only way back out, so a second import started
-    # from the shelf mid-bake would queue behind this one rather than tangle.
-    while not state["done"]:
+    def poll():
         if win.cancelled:
             worker.stop = True
-        app.processEvents(QtCore.QEventLoop.AllEvents, POLL_MS)
-        time.sleep(0.005)
+        if not state["done"]:
+            return
+        # Unregister FIRST. A callback that raises while still registered gets
+        # called again every 50 ms forever, and Houdini's own error dialog then
+        # reopens faster than it can be dismissed.
+        try:
+            hou.ui.removeEventLoopCallback(poll)
+        except Exception:                               # noqa: BLE001
+            pass
+        win.close()
+        if state["failed"]:
+            print("[assetlib] could not bake, rendering from source: "
+                  + ", ".join(Path(r).name for r in state["failed"]))
+        try:
+            build_fn()
+        except Exception as exc:                        # noqa: BLE001
+            # Nothing is waiting to catch this - we are on Houdini's idle
+            # callback, not on the caller's stack - so it has to be reported
+            # here or it is lost entirely.
+            print(f"[assetlib] build failed after baking: {exc}")
+            if hasattr(hou.ui, "displayMessage"):
+                hou.ui.displayMessage(f"Build failed after baking:\n\n{exc}",
+                                      severity=hou.severityType.Error)
 
-    win.close()
-    if state["failed"]:
-        print("[assetlib] could not bake, rendering from source: "
-              + ", ".join(Path(r).name for r in state["failed"]))
+    win.show()
+    QtCore.QThreadPool.globalInstance().start(worker)
+    hou.ui.addEventLoopCallback(poll)
+    # Returns to Houdini immediately. THIS is what unfreezes it: the event loop
+    # can only run once this script is off the main thread's stack.
+    return None
 
 
-def texture_rels_for(asset, opts):
-    """Imported lazily to avoid a circular import - build.py imports this module."""
+def _texture_rels(asset, opts):
+    """Lazy, because build.py imports this module."""
     from . import build
 
     return build.texture_rels(asset, opts)

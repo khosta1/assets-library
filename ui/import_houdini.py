@@ -237,6 +237,13 @@ def send(asset: Asset, asset_dir: Path, cfg, opts: dict) -> str:
             from assetlib_hou import build
 
             nodes = build.karma_component(asset, asset_dir, cfg, opts)
+            # None means the build was DEFERRED: textures are being baked on a
+            # pool thread and the nodes are made from Houdini's idle callback
+            # when that finishes. Counting them here would report 0 and read as
+            # a failed import, which is the opposite of what happened.
+            if nodes is None:
+                return (f"baking textures for {asset.name} - the nodes appear "
+                        "when it finishes; Houdini stays usable")
             return f"built {len(nodes)} node(s) for {asset.name}"
         except ImportError:
             # The adapter is not ported yet. Fall through to the request file
