@@ -32,6 +32,7 @@ from assetlib.verify import verify
 from . import theme
 from . import thumbcache
 
+from . import gridmodel
 from .gridmodel import ROW_ROLE, AssetGridModel, TileDelegate, _human, tile_sizes
 
 TYPE_ROLE = Qt.UserRole + 10
@@ -247,6 +248,7 @@ class MainWindow(QMainWindow):
 
         # Housekeeping with no deadline: it runs once the window is already up.
         thumbcache.sweep_async(cfg)
+        self._sync_on_launch()
 
         # Last, and only on a copy that has nothing. After the window is built,
         # not before: if the setup panel raised, a fresh install would show a
@@ -378,6 +380,22 @@ class MainWindow(QMainWindow):
             # is a filter someone forgets is on, and then the library looks
             # like it lost assets.
             message += "   (cloud hidden)"
+
+        # Counted rather than left to be tallied by eye across a scrolling
+        # grid. This is the one number in the bar that is about risk: those
+        # assets exist on this disk and nowhere else.
+        unpushed = sum(1 for r in rows if gridmodel.is_local_only(r))
+        if unpushed:
+            message += f"   ·   {unpushed} not on the server"
+            # The age goes WITH the number, not somewhere else. "43 not on the
+            # server" is alarming and was wrong; "43 not on the server
+            # (catalogue 6 h ago)" is the same number with the reason it might
+            # be wrong attached to it.
+            ages = [catalog.synced_age(h) for h in self.hosts if h.enabled]
+            if ages:
+                worst = max((a for a in ages if a is not None), default=None)
+                if worst is None or worst > 900:
+                    message += f"   (catalogue {catalog.describe_age(worst)})"
         # Whatever the startup migration did is worth saying once, on the first
         # refresh - after that the normal count takes the bar back.
         note = upgrade.describe(self._upgrade)
@@ -512,6 +530,47 @@ class MainWindow(QMainWindow):
         # Also clears the cooldown, which is what makes "fix the token, sync,
         # and the pictures appear" work without restarting the window.
         self.model.set_hosts(self.hosts)
+
+    def _sync_on_launch(self) -> None:
+        """Refresh the catalogue in the background, once the window is up.
+
+        The rule was "catalogues are opened at launch and NOT synced at launch",
+        and it was right about the thing it was protecting: startup must not
+        depend on a machine that is asleep most of the time. But "not ON the
+        launch path" was read as "never", and nothing else ever synced - so the
+        catalogue aged silently and the grid told a confident lie. Tonight it
+        showed 43 assets as missing from the server when seven were.
+
+        This is not on the launch path. The window is already built and filled
+        from the stored catalogue; this starts afterwards, on netpool, and if
+        the box is asleep it fails quietly and nothing changes. An ETag sync is
+        one request that usually comes back 304 with no body, so the cost of
+        being right is close to nothing.
+        """
+        if not self.hosts:
+            return
+        from .remote_libraries import sync_async
+
+        sync_async(self.cfg, self.hosts, self._sync_finished_quietly)
+
+    def _sync_finished_quietly(self, results: list) -> None:
+        """Same as a manual sync, minus the dialogs.
+
+        A launch-time sync must never open a window. The box being asleep is
+        the normal state, not an error, and an app that greets you with a
+        warning every time you open it away from home is an app you stop
+        reading warnings from.
+        """
+        remote.save_hosts(self.cfg, self.hosts)
+        self._reopen_remotes()
+        self._build_tree()
+        self.refresh()
+        changed = [f"{name}: {msg}" for name, ok, msg in results if ok]
+        if changed:
+            self.statusBar().showMessage(
+                self.statusBar().currentMessage()
+                + ("   ·   " if self.statusBar().currentMessage() else "")
+                + "   ·   ".join(changed))
 
     def _sync_catalogue(self) -> None:
         """Shift+F5. Ask every server what it holds; download no files."""

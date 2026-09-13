@@ -13,6 +13,8 @@ browsed and searched with the server switched off.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from . import index, remote
 
 # Columns the server sends. Listed rather than SELECT *'d so that a server
@@ -38,6 +40,12 @@ def sync(cfg, host: remote.Host, hosts: list | None = None) -> dict:
     """
     rows, etag = remote.catalog(host)
 
+    # Stamped on every SUCCESSFUL answer, including a 304. The question the UI
+    # has to answer is "how old is what I am showing you", and an unchanged
+    # catalogue that was confirmed unchanged a minute ago is current - not
+    # stale since whenever it last changed.
+    host.fields["synced_at"] = datetime.now(timezone.utc).isoformat()
+
     if rows is None:
         # 304. The stored catalogue is current, which is the whole point of
         # sending If-None-Match, and touching the database would be work done
@@ -47,6 +55,12 @@ def sync(cfg, host: remote.Host, hosts: list | None = None) -> dict:
             count = conn.execute("SELECT COUNT(*) n FROM assets").fetchone()["n"]
         finally:
             conn.close()
+        # Persisted here too, and this is the path it matters on: 304 is the
+        # COMMON answer, so a stamp written only when the catalogue changed
+        # would make a healthy daily sync look like it had not run since the
+        # last import.
+        if hosts is not None:
+            remote.save_hosts(cfg, hosts)
         return {"host": host.name, "changed": False, "count": count,
                 "etag": etag}
 
@@ -83,6 +97,39 @@ def sync(cfg, host: remote.Host, hosts: list | None = None) -> dict:
 
     return {"host": host.name, "changed": True, "count": len(rows),
             "etag": etag}
+
+
+def synced_age(host: remote.Host) -> float | None:
+    """Seconds since this host's catalogue was last confirmed, or None if never.
+
+    What the window needs in order to say how much to trust a red outline: the
+    "not on the server" state is only as true as the last successful sync, and
+    a catalogue from before an import is what made 43 tiles look un-pushed when
+    seven were.
+    """
+    stamp = host.fields.get("synced_at")
+    if not stamp:
+        return None
+    try:
+        then = datetime.fromisoformat(stamp)
+    except ValueError:
+        return None
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - then).total_seconds()
+
+
+def describe_age(seconds: float | None) -> str:
+    """'4 minutes ago' / 'never'. Plain words, for a status bar."""
+    if seconds is None:
+        return "never synced"
+    if seconds < 90:
+        return "just now"
+    if seconds < 3600:
+        return f"{int(seconds // 60)} min ago"
+    if seconds < 86400:
+        return f"{int(seconds // 3600)} h ago"
+    return f"{int(seconds // 86400)} day(s) ago"
 
 
 def open_all(cfg, hosts: list) -> list:

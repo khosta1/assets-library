@@ -28,6 +28,7 @@ ROW_ROLE = Qt.UserRole + 2
 # visible tile on every repaint and on every scroll pixel; string work in there
 # is the difference between a grid that glides and one that stutters.
 CLOUD_ROLE = Qt.UserRole + 3
+LOCAL_ONLY_ROLE = Qt.UserRole + 4
 
 # How long a host that failed is left alone. Long enough that a scroll through
 # a few hundred tiles makes one doomed request rather than one per tile, short
@@ -44,6 +45,23 @@ def is_cloud(row) -> bool:
     """
     origin = row["origin"] if "origin" in row.keys() else ""
     return str(origin or "").startswith("remote:")
+
+
+def is_local_only(row) -> bool:
+    """On this disk and on no server. The one tile state that is about risk.
+
+    False when `mirrored` is None, which means no catalogue is configured at
+    all: "the server does not have this" and "there is no server" are different
+    facts, and outlining every tile on a machine that never had one would be a
+    warning about nothing.
+
+    `cache` counts as mirrored by definition - a downloaded asset came FROM the
+    server, so the server has it.
+    """
+    if is_cloud(row):
+        return False
+    mirrored = row["mirrored"] if "mirrored" in row.keys() else None
+    return mirrored is False
 
 
 class _ThumbSignals(QObject):
@@ -196,6 +214,8 @@ class AssetGridModel(QAbstractListModel):
             return row
         if role == CLOUD_ROLE:
             return is_cloud(row)
+        if role == LOCAL_ONLY_ROLE:
+            return is_local_only(row)
         return None
 
     # ------------------------------------------------------------- thumbnails
@@ -406,12 +426,18 @@ class TileDelegate(QStyledItemDelegate):
                               text_rect.width(), text_h // TEXT_LINES)
             painter.drawText(line_rect, Qt.AlignHCenter | Qt.AlignVCenter, line)
 
-        if cloud:
-            # Last, over everything including the thumbnail. At the smallest
-            # zoom a tile is 96px and the image covers nearly all of it, so the
-            # fill is a few pixels of ground at the edges and the outline is
-            # carrying the whole message on its own.
-            painter.setPen(QPen(theme.cloud_edge(), 2))
+        # Last, over everything including the thumbnail. At the smallest zoom a
+        # tile is 96px and the image covers nearly all of it, so the outline is
+        # carrying the whole message on its own.
+        #
+        # Mutually exclusive by construction, not by luck: is_local_only()
+        # returns False for a cloud row, because an asset on the server is the
+        # one thing that cannot also be on no server.
+        edge = (theme.cloud_edge() if cloud
+                else theme.local_only_edge() if index.data(LOCAL_ONLY_ROLE)
+                else None)
+        if edge is not None:
+            painter.setPen(QPen(edge, 2))
             painter.setBrush(Qt.NoBrush)
             painter.drawRect(rect.adjusted(1, 1, -1, -1))
 

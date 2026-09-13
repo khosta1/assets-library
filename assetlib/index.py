@@ -281,11 +281,30 @@ def search_union(local_conn, remotes, text: str = "", limit: int = 5000) -> list
     rows = search(local_conn, text, limit)
     seen = {r["uuid"] for r in rows}
 
+    # Which local uuids the server also has. Computed HERE because this is the
+    # only place both answers exist at once - by the time the grid has a row,
+    # the remote side has been deduplicated away and a local asset that is on
+    # the server looks exactly like one that is not.
+    #
+    # `mirrored` is left None, not False, when no catalogue is configured: "the
+    # server does not have this" and "there is no server" are different facts,
+    # and painting every tile as un-backed-up on a machine that never had a
+    # server would be a warning about nothing.
+    mirrored = None
+    if remotes:
+        mirrored = set()
+        for _, conn in remotes:
+            mirrored |= {r["uuid"] for r in conn.execute("SELECT uuid FROM assets")}
+
+    for row in rows:
+        row["mirrored"] = None if mirrored is None else (row["uuid"] in mirrored)
+
     for name, conn in remotes:
         for row in search(conn, text, limit):
             if row["uuid"] in seen:
                 continue
             row["origin"] = f"remote:{name}"
+            row["mirrored"] = True          # it IS the server's copy
             seen.add(row["uuid"])
             rows.append(row)
 

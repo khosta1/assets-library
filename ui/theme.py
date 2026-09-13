@@ -67,6 +67,22 @@ def cloud_edge() -> QColor:
     return QColor(78, 142, 222)
 
 
+def local_only_edge() -> QColor:
+    """Outline of a tile that exists HERE and nowhere else.
+
+    The mirror of cloud_edge, and the more useful of the two: a blue tile is an
+    asset you could fetch, a red one is an asset that would be gone if this
+    disk died. It is the only state in the grid that is about risk rather than
+    about location.
+
+    Outline only, with no fill - a fill would compete with the thumbnail on
+    every tile of a library that has not been pushed yet, which early on is all
+    of them. Red because it is the one hue that reads as "attend to this"
+    without a legend, and the window uses it nowhere else.
+    """
+    return QColor(214, 84, 79)
+
+
 def dim_colour() -> QColor:
     # de-emphasised text: empty categories, rejected rows. PlaceholderText is
     # Qt's own role for this and stays legible on either ground - a literal
