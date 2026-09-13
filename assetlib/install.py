@@ -1,4 +1,4 @@
-"""Putting a script asset where an application will find it.
+r"""Putting a script asset where an application will find it.
 
 Every other asset type is finished when it is in the tree. A tool is finished
 when the application it was written for can load it, and that is a different
@@ -17,12 +17,21 @@ user's is edited. No shelf of theirs is appended to, no `userSetup.py` line is
 inserted. Install writes one file, uninstall deletes one file, and a half-done
 install is a file that either exists or does not.
 
-**The launcher is generated, never stored.** `Main_ui.txt` in the source hard-
-codes `H:\3D\Maya\Scripts\Manager_tool\suite\Main_ui`, which is wrong the moment
-the library owns a copy - and wrong in the worst way, because `sys.path.insert`
-at position 0 means Houdini would silently keep running the ORIGINAL while you
-edit the copy. So the asset records what the tool IS (entry, callable, label,
-icon) and the shelf XML is emitted here with the path the library actually has.
+**The launcher is generated, never stored.** `Main_ui.txt` in the source names
+an absolute path into the source tree, which is wrong the moment the library
+owns a copy. So the asset records what the tool IS - entry, callable, label,
+icon - and the shelf XML is emitted here with the path the library actually has.
+
+The emitted snippet carries no path at all: the package file has already put the
+folder on PYTHONPATH, so `import <module>` resolves. That is what lets a tool
+delete its own bootstrap lines rather than rewrite them.
+
+(An earlier version of this note claimed those source snippets would shadow the
+installed copy at runtime. They would not - they are inside module docstrings,
+as the manager-tool session established by reading them. The real risk was a
+person pasting a documented snippet, which is a documentation problem, and the
+tool side fixed it. Corrected here because a wrong reason in a comment outlives
+the commit that carried it.)
 
 No Qt and no `hou`: this writes JSON and XML into a directory, so it works from
 the standalone app with Houdini closed.
