@@ -345,3 +345,77 @@ The app reads the answer rather than deciding it: `sync.probe()` writes a
 temporary file into `library/` on the share and removes it. A permission read
 would have answered about the filesystem, which is the layer that does not
 know.
+
+---
+
+**20. The tool launched fine. It had been dead for a second and a half.**
+— 2026-09-13
+
+First tool ever launched out of the library: a tkinter tool, from the
+standalone window. Pressed Launch, confirmed the dialog, status bar said
+`launched point_clean_tool`, and **no window opened**. Nothing in `launch.log`,
+nothing on screen, no error anywhere. It looked exactly like a tool that had
+started and drawn nothing.
+
+**Cause.** `Popen` returns a live object the instant the process is *created*,
+which says nothing about whether the process then survived its first import.
+The child is created with `CREATE_NO_WINDOW` — deliberately, so a tool does not
+flash a black console on every launch — so its traceback went to a stdout that
+was not attached to anything. `as_subprocess` returned, `_launch_tool` reported
+success, and the `ModuleNotFoundError` was written to a handle nobody held.
+
+**Fix.** `launch.as_subprocess()` now sends the child's stdout and stderr to a
+log in the temp folder and returns a `Started(proc, log, python)`.
+`launch.died()` reads the exit code back, and `ui/app.py:_watch_launch()` asks
+it once, 1.5 s later, from a `QTimer` — **not** by waiting on the process, since
+a tool that works runs for an hour and blocking on it would freeze the window
+for precisely the launches that went right. Dead with a non-zero code gets a
+dialog with the tail of what it wrote.
+
+**RULE. A process being started is not a process running.** Anything launched
+without a console has to be asked, a moment later, whether it is still alive —
+otherwise the most common failure (dies immediately, on import) is the one that
+produces no signal at all.
+
+---
+
+**21. The bundled runtime is not general Python** — 2026-09-13
+
+The same launch, once it could speak, said:
+
+```
+ModuleNotFoundError: No module named 'tkinter'
+```
+
+Which reads as a broken asset, and is not one. Felix asked the right question
+at it — *is this script really standalone?* — and the answer is yes: `app:
+standalone` is about the **host**, meaning the tool needs no DCC, and says
+nothing about which interpreter runs it.
+
+**Cause.** `runtime\python.exe` is a trimmed 3.11 carrying PySide6, Pillow,
+numpy, OpenEXR and xxhash. **It has no tcl/tk at all**, so no stdlib `tkinter`
+— and `as_subprocess` defaulted to `sys.executable`, which in the standalone
+app *is* that runtime. Any tool written against a normal Python installation
+can hit this; tkinter is simply the most likely, because it is the one thing
+people assume is always there.
+
+**Fix.** `install.json` gained `"python"`, carried through `apps.from_manifest`
+→ `analyse._record_tool` → `fields.python` → `launch._python()`. A **bare name**
+is resolved on `PATH` at launch rather than stored as a path, because an asset
+syncs to a shared master and an absolute path out of one machine's AppData is
+wrong on every other. Declaring it also routes the launch out of process even
+inside Houdini (`launch.in_host()`), which is separately correct: a tkinter
+mainloop would sit on the thread Houdini needs. `launch.died()` now appends
+what the runtime actually ships when the missing module was missing from *it*.
+
+**RULE. "No install, no pip, no system Python" is a promise about the APP, not
+about anything the app runs.** The runtime is sized for this project's own
+imports; everything else it meets is someone else's dependency list, and the
+only honest answer is to let that someone declare what they need.
+
+**Worth knowing separately:** a core module changed on disk does not reach a
+running app. The asset that failed here was imported 37 seconds *after* the
+commit that added the field, by a process started before it — so `analyse.py`
+was still the old module in memory and the field was never written. Restart
+after touching `assetlib/`, not only after touching the UI.
+

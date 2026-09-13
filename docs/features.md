@@ -45,10 +45,12 @@ committed.
   in **that** process: no install, no restart, nothing written outside
   `library/`. From the standalone window only a tool needing no host is
   offered. The module and the call are shown and confirmed first — this is the
-  single exception to invariant 15. **First confirmed launch 2026-09-13**:
-  `point_clean_tool`, a tkinter tool, opened from the standalone window — the
-  first tool this library has ever run. *The in-process route, inside Houdini,
-  is still unrun.*
+  single exception to invariant 15. **Both routes confirmed 2026-09-13**:
+  `point_clean_tool` as a subprocess from the standalone window — the first
+  tool this library ever ran — and the in-process route inside Houdini, the
+  tool imported and run in the Python Panel's own session with no install and
+  no restart. That last sentence is the claim the whole `script` type was built
+  on, and it is now observed rather than argued.
 - **A tool can name the interpreter it needs** — `"python"` in `install.json`
   (2026-09-13). The bundled runtime ships PySide6 and numpy and no tcl/tk, so a
   tkinter tool cannot run in it at all. A bare name is resolved on PATH at

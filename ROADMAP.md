@@ -246,14 +246,14 @@ reconsider is the day someone declares `otls`.
 
 **Still open on it:**
 
-- ~~**Nothing has been run inside Houdini.**~~ **The standalone route is
-  proven** (2026-09-13): `point_clean_tool` launched from the library window,
-  the first tool this library has ever run. It cost two bugs worth keeping —
-  a declared interpreter was carried all the way into `asset.json` and then
-  never read, and a subprocess that died on its first import was reported as a
-  successful launch because `Popen` had succeeded. **The IN-PROCESS route,
-  inside Houdini, is still unrun** — and that is the one that matters for
-  `main_ui`, for the `Manager_tool` side, and for every `app:houdini` tool.
+- ~~**Nothing has been run inside Houdini.**~~ **Both routes proven
+  2026-09-13.** `point_clean_tool` as a subprocess from the standalone window —
+  the first tool this library has ever run — and the in-process route inside
+  Houdini, the tool running in the Python Panel's own session. Emitted, parsed,
+  and finally clicked. Getting there cost two bugs worth keeping: a declared
+  interpreter carried all the way into `asset.json` and then never read, and a
+  subprocess that died on its first import reported as a successful launch
+  because `Popen` had succeeded (gotchas 20 and 21).
 - **`refresh_from_source()` does not exist.** A tool imported today is a
   snapshot; re-pulling from the author's working folder has no button, and
   copy-with-update was the reason the manifest records a source path at all.
