@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QStyledItemDelegate, QTableView, QVBoxLayout)
 
 from assetlib import index as idx
-from assetlib.analyse import (BONUS, PREVIEW_TARGET, SKIP, analyse, conflicts,
+from assetlib.analyse import (BONUS, PREVIEW_TARGET, SKIP, _walk, analyse, conflicts,
                               current_target, derive_name, rebind, set_key,
                               set_lod, set_variant, targets_for)
 from assetlib.commit import commit
@@ -51,8 +51,16 @@ MAX_LOD = 9
 
 
 class DropZone(QFrame):
-    """A rectangle that accepts files and folders. Dropping a folder takes the
-    files directly inside it, never the whole tree - this window is one asset."""
+    """A rectangle that accepts files and folders.
+
+    Dropping a folder takes its WHOLE tree, because this window is one asset and
+    a dropped folder means "all of this is it". A folder holding several assets
+    side by side is Import folder…, which makes one row per subfolder.
+
+    It took one level until 2026-09-13, which was invisible while every asset
+    was a flat texture folder and wrong the moment a tool arrived - see
+    dropEvent.
+    """
 
     dropped = Signal(list)
 
@@ -87,7 +95,23 @@ class DropZone(QFrame):
         for url in event.mimeData().urls():
             p = Path(url.toLocalFile())
             if p.is_dir():
-                paths.extend(sorted(f for f in p.iterdir() if f.is_file()))
+                # RECURSIVE, and through analyse's own walker so there is one
+                # definition of "the files in this folder" rather than two that
+                # can disagree - it also skips .git and __MACOSX for free.
+                #
+                # This was p.iterdir(), one level, which was invisible while
+                # every asset was a flat texture folder. Dropping the
+                # Manager_tool suite collected exactly ONE file: install.json is
+                # the only thing at its root and all ten tools are in
+                # subfolders. The import succeeded, the asset held its manifest
+                # and no code, and the failure surfaced three steps later as
+                # "src/Main_ui/manager_ui.py is not in the package".
+                #
+                # Dropping a folder on the Add window means "all of this is one
+                # asset" - that is what this window is for. A folder holding
+                # several assets side by side is Import folder..., which makes
+                # one row per subfolder.
+                paths.extend(sorted(_walk(p)))
             elif p.is_file():
                 paths.append(p)
         if paths:
