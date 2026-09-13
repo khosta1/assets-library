@@ -968,10 +968,24 @@ def _record_tool(plan: ImportPlan, files, cfg) -> None:
     proposed = apps.entries(files, plan.source)
     plan.fields["shelf"] = [{**e, "entry": f"{BLOB_DIR}/{e['entry']}"}
                             for e in proposed]
-    plan.fields["otls"] = sorted({
-        f"{BLOB_DIR}/{Path(plan.rel(f)).parent.as_posix()}"
-        for f in files if f.suffix.lower() in (".hda", ".otl", ".hdanc", ".hdalc")
-    })
+
+    # `otls` is NEVER inferred, only declared. Autodetect used to fill it from
+    # any .hda it found, and the manager-tool session was right to object:
+    # declaring a folder INSTALLS what is in it, and an asset syncs to the
+    # shared master - so guessing would have put 30 vendored third-party HDAs
+    # onto a server for other people to load. Whether a bundled .hda may be
+    # redistributed is a decision its owner makes, not something an importer
+    # settles by noticing a file extension.
+    plan.fields["otls"] = []
+    hdas = [f for f in files
+            if f.suffix.lower() in (".hda", ".otl", ".hdanc", ".hdalc")]
+    if hdas:
+        folders = sorted({Path(plan.rel(f)).parent.as_posix() for f in hdas})
+        plan.warnings.append(
+            f"{len(hdas)} digital asset(s) in {len(folders)} folder(s) - they "
+            f"travel with the package but are NOT put on Houdini's path. Add "
+            f"\"otls\" to {apps.MANIFEST} to install them, once you know they "
+            f"are yours to share.")
     if len(proposed) > 1:
         # Said out loud because it is the number a person must reduce. Five
         # buttons for a suite with one launcher is the shape of the mistake.
