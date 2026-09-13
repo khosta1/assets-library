@@ -23,6 +23,30 @@ committed: `assetlib/derived.py` and its `build.py` hook.
 
 ## LIVE
 
+- **Script assets keep their tree** — `folder_blob` is implemented
+  (2026-09-13). The source lands verbatim at `src/<relative path>`: nothing
+  renamed, slotted, contested or dropped. Also fixes `terrain`, `garment`,
+  `reference`, `setup` and `unknown`, which were all silently getting the
+  texture-set treatment. The `Manager_tool` suite went from *4 kept, 15
+  rejected* to *51 kept, 0 rejected*.
+- **App tags decide what a tool can do** — `app:houdini`, `app:maya`,
+  `app:standalone`. Tags and not the category, because a tool can target two
+  applications. `config/apps.json` holds the per-app regime; an app with
+  `install: null` shows no button, which is the honest answer rather than a
+  greyed-out promise.
+- **`install.json`, written by the tool author** — entry points, `pythonpath`,
+  `otls`, read at import as the prefill. Autodetect is the fallback and is
+  weaker than it looks: scanning for `def show()` proposed **five** entries for
+  a suite with one launcher, because these tools do their work at module level.
+  Read as **data, never executed** (invariant 15).
+- **Install to Houdini** — one package JSON in
+  `$HOUDINI_USER_PREF_DIR/packages/` plus a generated shelf inside the asset.
+  One menu entry per installed version; flips to *Uninstall* when present.
+  Nothing of the user's is edited, and uninstall deletes one file and leaves
+  the asset in the library. HDAs are found where they are via
+  `HOUDINI_OTLSCAN_PATH`, never moved. *Emitted and parsed; no button has been
+  clicked inside Houdini yet.*
+
 - **Remote catalogue** — `assetlib/remote.py` + `catalog.py`. Library ▸ *Remote
   libraries…* declares a server; **Shift+F5** syncs `/api/catalog` into
   `.assetlib/remote/<host>.db`, ETag-diffed. Search runs local ∪ remote
