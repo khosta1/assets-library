@@ -100,8 +100,17 @@ where the 25 `verify` warnings came from. The *Use .rat textures* checkbox in
 the loop. Verified from the library side: 6 maps in 1.0 s, re-runs skip, zero
 new `verify` warnings.
 
+Baking runs **before the first node exists**, on a pool thread, with a small
+progress window (`assetlib_hou/bakewindow.py`) — the conversion is a subprocess
+and `derived.py` imports no `hou`, so Houdini's main thread does nothing but
+pump events and stays interactive. It blocks the *import*, not the
+*application*: the nodes appear when the bake finishes, and you can look around
+meanwhile. Nothing is shown when every bake is already current, which is every
+build after the first.
+
 **Still open on it:** never run inside Houdini, so whether Karma is happy with
-these files is unproven. `.tx` has a converter wired (`hoiiotool`) and no
+these files is unproven — and the progress window in particular has only been
+exercised from the library side, never against a live Qt loop inside the host. `.tx` has a converter wired (`hoiiotool`) and no
 caller. `.usda` is untouched. `derived/` has no size budget — same shape as the
 `_cache/` gap, and a `.rat` is ~3× its source.
 

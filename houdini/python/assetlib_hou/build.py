@@ -1111,6 +1111,25 @@ BIGGEST = "__biggest__"
 ALL_VARIANTS = "__all__"
 
 
+def texture_rels(asset: Asset, opts: dict) -> dict:
+    """`{slot: package-relative texture}` this build will use, before any baking.
+
+    Factored out because two things need the same answer and must not drift:
+    `textures_for()` binds them, and the pre-bake window converts them. A list
+    that disagreed would mean baking one size and rendering another - and the
+    bake would look like it had silently done nothing.
+    """
+    opts = opts or {}
+    want = opts.get("res") or BIGGEST
+    out = {}
+    for slot, rel in (asset.textures or {}).items():
+        # A specific size was asked for and this slot has it. Otherwise the
+        # binding already names the biggest, because commit promoted it.
+        sizes = (asset.resolutions or {}).get(slot) or {}
+        out[slot] = sizes[want] if (want != BIGGEST and want in sizes) else rel
+    return out
+
+
 def textures_for(asset: Asset, asset_dir: Path, cfg, opts: dict) -> dict:
     """`{slot: (path, mtlx_input, dtype, colorspace, post_node)}` - the shape the
     ported builders expect, built from BINDINGS rather than from filenames.
@@ -1129,16 +1148,10 @@ def textures_for(asset: Asset, asset_dir: Path, cfg, opts: dict) -> dict:
     want = opts.get("res") or BIGGEST
 
     out = {}
-    for slot, rel in (asset.textures or {}).items():
+    for slot, rel in texture_rels(asset, opts).items():
         spec = by_key.get(slot)
         if spec is None:
             continue
-
-        # A specific size was asked for and this slot has it. Otherwise the
-        # binding already names the biggest, because commit promoted it.
-        sizes = (asset.resolutions or {}).get(slot) or {}
-        if want != BIGGEST and want in sizes:
-            rel = sizes[want]
 
         # A baked .rat instead of the source, when one exists or can be made.
         #
@@ -1251,6 +1264,26 @@ def karma_component(asset: Asset, asset_dir: Path, cfg, opts: dict | None = None
     opts = dict(opts or {})
     if opts.get("localize"):
         asset_dir = _localize(asset, asset_dir, cfg)
+
+    # Bake BEFORE the first node exists, with a window on it. Doing it inside
+    # textures_for() worked and froze Houdini for up to half a minute on a raw
+    # 8K scan, with nothing on screen saying why. Here the conversion runs on a
+    # pool thread - derived.py is subprocesses and imports no hou, so that is
+    # safe - while the main thread pumps events and stays interactive.
+    #
+    # After this, textures_for() finds every bake current and binds it without
+    # converting anything itself. Silent and instant when there is nothing to
+    # do, which is every build after the first.
+    try:
+        from .bakewindow import bake_first
+
+        bake_first(asset, asset_dir, opts)
+    except Exception as exc:                            # noqa: BLE001
+        # A progress window is not worth failing an import over. Without it,
+        # textures_for() still bakes inline exactly as before - slower and
+        # silent, but correct.
+        print(f"[assetlib] pre-bake window unavailable ({exc}); "
+              "converting inline instead")
 
     textures = textures_for(asset, asset_dir, cfg, opts)
     built = []
