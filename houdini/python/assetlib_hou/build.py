@@ -30,6 +30,7 @@ from pathlib import Path
 
 import hou
 
+from assetlib import derived
 from assetlib.model import Asset, expand, res_width
 
 # Which loader a geometry file needs. USD goes in as a reference on a LOP;
@@ -1124,7 +1125,8 @@ def textures_for(asset: Asset, asset_dir: Path, cfg, opts: dict) -> dict:
     _TEX_SLOTS. One copy now, and it is the one the importer already used.
     """
     by_key = {s["key"]: s for s in cfg.slots_cfg["slots"]}
-    want = (opts or {}).get("res") or BIGGEST
+    opts = opts or {}
+    want = opts.get("res") or BIGGEST
 
     out = {}
     for slot, rel in (asset.textures or {}).items():
@@ -1138,12 +1140,36 @@ def textures_for(asset: Asset, asset_dir: Path, cfg, opts: dict) -> dict:
         if want != BIGGEST and want in sizes:
             rel = sizes[want]
 
+        # A baked .rat instead of the source, when one exists or can be made.
+        #
+        # This is the only place it has to happen, and it has to happen HERE
+        # rather than in the shader builders: give Karma a .jpg and it converts
+        # it itself, writing the result into tex/ beside the source, which is
+        # how 60 orphan .rat files appeared in the library. Hand it a .rat and
+        # there is nothing left to convert.
+        #
+        # Falling back to the source on every failure is the whole contract: no
+        # Houdini converter, an unreadable texture, a conversion that times out
+        # - all of them mean "render from the original", never "do not render".
+        baked = None
+        if opts.get("derived", True):
+            try:
+                if "<UDIM>" in rel:
+                    baked = derived.ensure_udim(asset, asset_dir, rel,
+                                                generate=opts.get("bake", True))
+                else:
+                    baked = derived.ensure(asset_dir, rel,
+                                           generate=opts.get("bake", True))
+            except Exception:                           # noqa: BLE001
+                baked = None
+
         # UDIM: asset.json stores the token path, which is already the spelling
         # Houdini resolves. The original had to regex the tile back out of a
         # filename and guess whether a four-digit number was a tile or a
         # resolution; that guess is gone.
-        out[slot] = (asset_dir / rel, spec.get("mtlx_input"), spec.get("dtype"),
-                     spec.get("colorspace"), spec.get("post_node"))
+        out[slot] = (asset_dir / (baked or rel), spec.get("mtlx_input"),
+                     spec.get("dtype"), spec.get("colorspace"),
+                     spec.get("post_node"))
     return out
 
 

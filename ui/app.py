@@ -15,11 +15,11 @@ from pathlib import Path
 
 from PySide6.QtCore import QItemSelectionModel, Qt, QSize, QTimer
 from PySide6.QtGui import QAction, QFont, QIcon
-from PySide6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel, QLineEdit,
-                               QListView, QMainWindow, QMenu, QMessageBox,
-                               QPushButton, QSlider, QSplitter, QStatusBar,
-                               QTreeWidget, QTreeWidgetItem, QVBoxLayout,
-                               QWidget)
+from PySide6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QInputDialog,
+                               QLabel, QLineEdit, QListView, QMainWindow, QMenu,
+                               QMessageBox, QPushButton, QSlider, QSplitter,
+                               QStatusBar, QTreeWidget, QTreeWidgetItem,
+                               QVBoxLayout, QWidget)
 
 from assetlib import catalog
 from assetlib import index as idx
@@ -210,6 +210,12 @@ class MainWindow(QMainWindow):
         upgrade_now.triggered.connect(self._migrate)
         menu.addAction(upgrade_now)
         menu.addSeparator()
+        bake = QAction("Generate .rat textures for selected…", self)
+        bake.setToolTip(
+            "Pre-bake into derived/, so Karma does not convert at render time "
+            "and does not write its own .rat into tex/")
+        bake.triggered.connect(self._bake_selected)
+        menu.addAction(bake)
         desktop = QAction("Put a shortcut on the Desktop", self)
         desktop.triggered.connect(self._make_shortcut)
         desktop.setEnabled(shortcut.available())
@@ -227,6 +233,10 @@ class MainWindow(QMainWindow):
         sync_now.setToolTip("Ask every server what it holds. Files are not downloaded.")
         sync_now.triggered.connect(self._sync_catalogue)
         menu.addAction(sync_now)
+        push = QAction("Push this library to a server…", self)
+        push.setToolTip("Over SMB on the LAN: what is new, changed or moved here")
+        push.triggered.connect(self._push_to_server)
+        menu.addAction(push)
 
         self._timer = QTimer(self, singleShot=True, interval=150)
         self._timer.timeout.connect(self.refresh)
@@ -434,6 +444,25 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ remote
 
+    def _bake_selected(self) -> None:
+        """Pre-bake .rat for the selected assets. Lazily imported, like the rest.
+
+        Selection only, never the whole library by accident: baking all 111
+        would be ~900 conversions and roughly +100 GB, which is not something a
+        menu entry should be able to start without being asked for by name.
+        """
+        from .bake import BakeDialog
+
+        rows = [r for r in self._selected_rows() if self._host_for(r) is None]
+        if not rows:
+            QMessageBox.information(
+                self, "Generate .rat textures",
+                "Select one or more assets that are on this disk.\n\n"
+                "A cloud asset has to be imported before anything can be baked "
+                "from it.")
+            return
+        BakeDialog(self.cfg, rows, self).exec()
+
     def _make_shortcut(self, quiet: bool = False) -> None:
         """Desktop shortcut for THIS copy, pointing at this folder's launcher.
 
@@ -515,6 +544,45 @@ class MainWindow(QMainWindow):
                 "\n".join(bad) + ("\n\n" + "\n".join(good) if good else ""))
         self.statusBar().showMessage(
             "   ·   ".join(good) if good else "no server answered")
+
+    def _push_to_server(self) -> None:
+        """Send what this disk has that the master does not.
+
+        Over SMB, not over the API: the API is read-only by decision, and the
+        box is the master (`server/client-contract.md`). A host with no share
+        recorded is one that is only ever browsed, so it is not offered.
+        """
+        from .sync_server import PushToServerDialog
+
+        able = [h for h in self.hosts if h.share]
+        if not able:
+            QMessageBox.information(
+                self, "Push to a server",
+                "No server has a share recorded.\n\n"
+                "Library ▸ Remote libraries… — fill in the Share column "
+                "with the folder on the server that holds library/, "
+                "for example\n\n"
+                r"    \\192.168.1.13\data2\assets")
+            return
+        host = able[0]
+        if len(able) > 1:
+            name, ok = QInputDialog.getItem(
+                self, "Push to a server", "Server:",
+                [h.name for h in able], 0, False)
+            if not ok:
+                return
+            host = next(h for h in able if h.name == name)
+
+        dialog = PushToServerDialog(self.cfg, host, self)
+        dialog.exec()
+        if dialog.pushed:
+            # The server's catalogue is what the grid shows for that host, and
+            # it is now behind the share by however long the box takes to
+            # re-index. Saying so beats a cloud tile that quietly does not
+            # appear.
+            self.statusBar().showMessage(
+                "Sent. The server's catalogue updates when it re-indexes — "
+                "then Shift+F5 here.")
 
     # ------------------------------------------------------------------ import
 

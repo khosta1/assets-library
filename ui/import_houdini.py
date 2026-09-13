@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog,
                                QHBoxLayout, QLabel, QPushButton, QRadioButton,
                                QVBoxLayout)
 
+from assetlib import derived
 from assetlib.model import Asset, res_width
 
 REQUEST_FILE = "request.json"
@@ -163,6 +164,21 @@ class HoudiniImportDialog(QDialog):
             "without the library, at the cost of a second copy on disk.")
         lay.addWidget(self.localize)
 
+        self.bake = QCheckBox("Use .rat textures   (bake missing ones into derived/)")
+        self.bake.setChecked(derived.available())
+        self.bake.setEnabled(derived.available())
+        self.bake.setToolTip(
+            "Karma reads a .rat far faster than a .jpg - and if you do not give\n"
+            "it one it makes its own, writing it into tex/ beside the source.\n"
+            "That is where the stray .rat files in this library came from.\n\n"
+            "First build of an asset pays the conversion (~1s per 2K map, ~5s\n"
+            "per 8K); after that they are reused. A .rat is about 3x the size of\n"
+            "its source and lives in derived/, which is deletable and is never\n"
+            "sent to the server."
+            + ("" if derived.available() else
+               "\n\nDisabled: iconvert was not found. It ships with Houdini."))
+        lay.addWidget(self.bake)
+
         # --- buttons --------------------------------------------------------
         row = QHBoxLayout()
         row.addStretch(1)
@@ -188,6 +204,12 @@ class HoudiniImportDialog(QDialog):
             "localize": bool(self.localize.isChecked()),
             "res": self.res.currentData() if self.res else BIGGEST,
             "variant": self.variant.currentData() if self.variant else ALL_VARIANTS,
+            # Two flags, not one: "derived" is whether to USE a bake that
+            # exists, "bake" is whether to make a missing one. Off-and-off
+            # is the old behaviour exactly, which is what makes this safe
+            # to turn off when a conversion misbehaves.
+            "derived": bool(self.bake.isChecked()),
+            "bake": bool(self.bake.isChecked()),
         }
 
 
