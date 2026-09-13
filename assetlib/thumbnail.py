@@ -35,6 +35,10 @@ except ImportError:                                  # pragma: no cover
 
 THUMB_SIZE = 512
 JPEG_QUALITY = 88
+# What transparency is composited onto. Matches ui/theme.tile_colour() - Base
+# lightened 130 under the forced dark scheme - by VALUE, because assetlib holds
+# no Qt and cannot ask. If the theme's tile ever changes, this follows by hand.
+FLATTEN_GROUND = (58, 58, 58)
 
 # Formats whose pixels are linear and unbounded. They need exposure, not a cast.
 FLOAT_EXTS = {".hdr", ".exr"}
@@ -304,6 +308,35 @@ def why_not(src) -> str:
     return ""
 
 
+def _flatten(opened):
+    """Any mode -> RGB, compositing transparency onto the tile ground.
+
+    `convert("RGB")` is what this replaced, and it does not composite: it drops
+    the alpha channel and keeps whatever RGB was stored underneath. For a
+    rounded app icon that is invisible when the exporter wrote black there and
+    glaring when it wrote WHITE - a bright square around the icon on a dark
+    grid. Measured, on the same image saved two ways:
+
+        transparent corners, black underneath -> (0, 0, 0)
+        transparent corners, white underneath -> (255, 255, 255)
+
+    Neither was chosen. Now the ground is, and it is dark because these are
+    dark-UI icons on a forced-dark grid - white corners would be the most
+    visible thing in the window. FLATTEN_GROUND matches `theme.tile_colour()`
+    by value rather than by import: `assetlib` holds no Qt, so the number is
+    duplicated here deliberately and the comment is what keeps them together.
+
+    No single ground is right - a tile is also drawn selected, and blue when the
+    asset is on a server - so this is the common case, chosen, not a guess.
+    """
+    if opened.mode in ("RGBA", "LA", "PA") or "transparency" in opened.info:
+        rgba = opened.convert("RGBA")
+        ground = Image.new("RGB", rgba.size, FLATTEN_GROUND)
+        ground.paste(rgba, mask=rgba.split()[-1])
+        return ground
+    return opened.convert("RGB")
+
+
 def render(src, size: int = THUMB_SIZE):
     """Decode `src` and return a PIL RGB image no larger than `size`."""
     src = Path(src)
@@ -328,7 +361,7 @@ def render(src, size: int = THUMB_SIZE):
                     image = Image.fromarray(
                         _tonemap(np.stack([plane] * 3, axis=-1)), mode="RGB")
                 else:
-                    image = opened.convert("RGB")
+                    image = _flatten(opened)
         image.thumbnail((size, size))
         return image
     except Exception:                                # noqa: BLE001
