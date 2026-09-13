@@ -242,6 +242,9 @@ class MainWindow(QMainWindow):
         push.triggered.connect(self._push_to_server)
         menu.addAction(push)
 
+        # Launched subprocesses, held so Popen is not collected while the tool
+        # is still starting. Dropped once each one is known to have survived.
+        self._launched: list = []
         self._timer = QTimer(self, singleShot=True, interval=150)
         self._timer.timeout.connect(self.refresh)
 
@@ -543,7 +546,7 @@ class MainWindow(QMainWindow):
             if host:
                 launch.in_process(asset, path, item)
             else:
-                launch.as_subprocess(asset, path, item)
+                self._watch_launch(asset, launch.as_subprocess(asset, path, item))
         except launch.LaunchError as exc:
             QMessageBox.critical(self, "Could not launch", str(exc))
             return
@@ -555,6 +558,33 @@ class MainWindow(QMainWindow):
                 f"The tool started and then failed:\n\n{type(exc).__name__}: {exc}")
             return
         self.statusBar().showMessage(f"launched {asset.name}")
+
+    def _watch_launch(self, asset, started) -> None:
+        """Say so when a tool dies the moment it starts.
+
+        Popen succeeds whatever happens next, and the subprocess is created
+        with no console, so a traceback has nowhere to appear: a tool missing a
+        dependency looked EXACTLY like one that launched. It was found by a
+        tkinter tool launched with the bundled runtime, which has no tcl/tk -
+        the window never opened and nothing said why.
+
+        Checked once, shortly after, from the event loop. Not by waiting on the
+        process: a tool that works runs for an hour, so blocking until it exits
+        would freeze the window for exactly the launches that went right.
+        """
+        from assetlib import launch
+
+        self._launched.append(started)      # or Popen is collected mid-flight
+
+        def verdict():
+            note = launch.died(started)
+            if note:
+                QMessageBox.critical(self, f"{asset.name} did not start", note)
+                self.statusBar().showMessage(f"{asset.name} exited immediately")
+            if started in self._launched and started.proc.poll() is not None:
+                self._launched.remove(started)
+
+        QTimer.singleShot(1500, verdict)
 
     def _bake_selected(self) -> None:
         """Pre-bake .rat for the selected assets. Lazily imported, like the rest.

@@ -18,10 +18,16 @@ choosing a named asset from a menu, and the command is shown before it runs.
 That distinction is load-bearing now that script assets can arrive by download
 from the box.
 
-Two routes, and which one is available is a fact about the host:
+Two routes, and which one is available is a fact about the host - and about
+the tool, which can say the current process is the wrong one:
 
     inside Houdini   import the module and call it, in this process
-    standalone app   run it as a subprocess with the bundled runtime
+    standalone app   run it as a subprocess
+    declares python  a subprocess in THAT interpreter, host or not
+
+The third exists because the bundled runtime is not a general Python: it ships
+PySide6 and numpy and no tcl/tk at all, so a tkinter tool started with it dies
+on its first import. `install.json` names what it needs; see `docs/tools.md`.
 
 A Houdini tool has no third option: it imports `hou`, which exists only inside
 Houdini. Offering to launch one from the standalone window would produce an
@@ -38,7 +44,9 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+from typing import NamedTuple
 
 from . import apps
 
@@ -185,16 +193,33 @@ def in_process(asset, asset_dir: Path, item: dict):
     return fn()
 
 
-def as_subprocess(asset, asset_dir: Path, item: dict, python: Path | None = None):
-    """Run the entry in its own interpreter. For a tool that needs no host.
+class Started(NamedTuple):
+    """A launched subprocess, and where its output went."""
 
-    The bundled runtime, because it is the only interpreter this project can be
-    sure of - the machine may have no system Python, which is the whole reason
-    `runtime/` travels with the folder.
+    proc: subprocess.Popen
+    log: Path
+    python: Path
+
+
+def as_subprocess(asset, asset_dir: Path, item: dict, python: Path | None = None):
+    """Run the entry in its own interpreter. For a tool this process cannot run.
+
+    The bundled runtime by DEFAULT, because it is the only interpreter this
+    project can be sure of - the machine may have no system Python, which is
+    the whole reason `runtime/` travels with the folder. A tool that needs
+    something the runtime is not says so in its manifest, and `_python()`
+    resolves it. The runtime ships PySide6 and numpy and nothing else, so this
+    is not a rare case: a tkinter tool cannot run in it at all.
+
+    Output goes to a LOG rather than to a console. CREATE_NO_WINDOW is there so
+    a tool does not flash a black box on every launch, and the price of it
+    showed up at once - a tool that dies on its first import dies in silence,
+    the status bar says "launched", and nothing anywhere says otherwise.
+    `died()` is what reads this back.
     """
     path, module, call = _checked(asset, asset_dir, item)
 
-    python = Path(python) if python else Path(sys.executable)
+    python = _python(asset, python)
     env = dict(os.environ)
     joined = os.pathsep.join(str(p) for p in search_paths(asset, asset_dir))
     env["PYTHONPATH"] = (joined + os.pathsep + env["PYTHONPATH"]
@@ -209,12 +234,48 @@ def as_subprocess(asset, asset_dir: Path, item: dict, python: Path | None = None
     # `if __name__ == '__main__'` and define no callable at all - importing one
     # defines functions and opens nothing. Calling the entry afterwards when it
     # exists covers the other shape without having to know which this is.
+    log = Path(tempfile.gettempdir()) / f"assetlib-launch-{asset.name}.log"
     try:
-        return subprocess.Popen(
+        handle = log.open("wb")
+    except OSError:
+        handle = subprocess.DEVNULL
+
+    try:
+        proc = subprocess.Popen(
             [str(python), "-c", snippet], cwd=str(path.parent), env=env,
+            stdout=handle, stderr=subprocess.STDOUT,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except OSError as exc:
-        raise LaunchError(f"could not start {python.name}: {exc}") from exc
+        raise LaunchError(f"could not start {python}: {exc}") from exc
+    finally:
+        # The child holds its own copy; keeping ours open would lock the file
+        # against being read back on Windows.
+        if handle is not subprocess.DEVNULL:
+            handle.close()
+
+    return Started(proc, log, python)
+
+
+def died(started: Started) -> str | None:
+    """What went wrong, if the process is already gone. None while it lives.
+
+    Asked a moment AFTER the launch rather than at it: a tool that started
+    correctly is still running, and one whose first import failed is already
+    gone. That difference is the entire signal. Without it, Popen succeeding
+    was reported as the tool running, which it is not - Popen succeeds whatever
+    the tool does next.
+    """
+    code = started.proc.poll()
+    if code is None or code == 0:
+        return None
+    tail = ""
+    try:
+        tail = started.log.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        pass
+    tail = "\n".join(tail.splitlines()[-12:])
+    return (f"{started.python} exited with code {code}, and no window opened."
+            f"\n\n{tail or 'It wrote nothing at all.'}")
 
 
 def launchable(cfg, asset) -> bool:
