@@ -635,13 +635,32 @@ class MainWindow(QMainWindow):
         dialog = PushToServerDialog(self.cfg, host, self)
         dialog.exec()
         if dialog.pushed:
-            # The server's catalogue is what the grid shows for that host, and
-            # it is now behind the share by however long the box takes to
-            # re-index. Saying so beats a cloud tile that quietly does not
-            # appear.
-            self.statusBar().showMessage(
-                "Sent. The server's catalogue updates when it re-indexes — "
-                "then Shift+F5 here.")
+            # Close the loop rather than describe it. A push moves files; the
+            # server's catalogue is built from its own index and does not
+            # notice; this window reads that catalogue. Telling the user to
+            # Shift+F5 later put the third link in their head, which is where
+            # it was forgotten - and a forgotten sync is a grid that reports
+            # assets as missing from a server that has them.
+            from .remote_libraries import after_push_async
+
+            self.statusBar().showMessage("Sent. Updating the server catalogue…")
+            after_push_async(self.cfg, host, self.hosts,
+                             self.statusBar().showMessage,
+                             self._after_push_done)
+
+    def _after_push_done(self, ok: bool, message: str) -> None:
+        """Whatever happened, the grid is re-read from whatever is now true."""
+        remote.save_hosts(self.cfg, self.hosts)
+        self._reopen_remotes()
+        self._build_tree()
+        self.refresh()
+        self.statusBar().showMessage(message)
+        if not ok:
+            # Only the failures get a dialog, and only after a push - the user
+            # just moved gigabytes deliberately and is entitled to know the
+            # catalogue did not follow. The launch-time sync stays silent for
+            # the opposite reason: nobody asked it for anything.
+            QMessageBox.information(self, "Pushed, but not yet visible", message)
 
     # ------------------------------------------------------------------ import
 

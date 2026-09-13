@@ -14,6 +14,8 @@ job exists rather than a plain function call.
 
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import QObject, QRunnable, Signal
 from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox,
                                QHBoxLayout, QHeaderView, QLabel, QMessageBox,
@@ -137,6 +139,100 @@ class HealthJob(QRunnable):
                             f"{info.get('assets', '?')} asset(s), indexed "
                             f"{info.get('indexed_at') or 'never'}"))
         self.signals.done.emit(results)
+
+
+class AfterPushSignals(QObject):
+    step = Signal(str)
+    done = Signal(bool, str)
+
+
+class AfterPushJob(QRunnable):
+    """Re-index the box, wait for it, then pull the catalogue back down.
+
+    The three links nobody was joining. A push moves files; the server's
+    catalogue is built from its own index and does not notice; and this app
+    reads that catalogue. Leave any link out and the grid keeps describing the
+    library as it was before the push - which is exactly what "43 not on the
+    server" was.
+
+    Waiting is the part that has to be done properly. `sync.reindex()` uses
+    `--no-block`, deliberately, so the ssh call returns immediately and says
+    nothing about whether the walk finished. Syncing straight after it would
+    re-fetch the catalogue the box has not rebuilt yet, and the ETag would even
+    make that look like a clean 304. So this polls `indexed_at` until it MOVES,
+    which is the signal `sync.reindex()`'s own docstring points at.
+    """
+
+    def __init__(self, cfg, host, hosts, signals, timeout: int = 180):
+        super().__init__()
+        self.cfg, self.host, self.hosts = cfg, host, hosts
+        self.signals, self.timeout = signals, timeout
+        self.setAutoDelete(True)
+
+    def _indexed_at(self):
+        try:
+            return remote.health(self.host).get("indexed_at")
+        except Exception:                                   # noqa: BLE001
+            return None
+
+    def run(self):
+        from assetlib import sync as pushsync
+
+        before = self._indexed_at()
+
+        if self.host.ssh:
+            self.signals.step.emit("asking the server to re-index…")
+            ok, message = pushsync.reindex(self.host.ssh)
+            if not ok:
+                # Not fatal. The box re-indexes on its own timer at 04:00, so
+                # the catalogue becomes right eventually; what is lost is only
+                # the immediacy. Said plainly rather than swallowed.
+                self.signals.done.emit(
+                    False, f"pushed, but the re-index could not be started "
+                           f"({message}). The box does it itself at 04:00.")
+                return
+        else:
+            self.signals.done.emit(
+                False, "pushed. No SSH account is set for this server, so its "
+                       "catalogue updates on its own timer at 04:00.")
+            return
+
+        self.signals.step.emit("waiting for the server to finish indexing…")
+        waited = 0.0
+        while waited < self.timeout:
+            if netpool.stopping():
+                return
+            time.sleep(2.0)
+            waited += 2.0
+            now = self._indexed_at()
+            if now and now != before:
+                break
+        else:
+            self.signals.done.emit(
+                False, f"pushed and re-index started, but the server had not "
+                       f"finished after {int(self.timeout)}s. Shift+F5 later.")
+            return
+
+        self.signals.step.emit("downloading the catalogue…")
+        try:
+            result = catalog.sync(self.cfg, self.host, self.hosts)
+        except remote.RemoteError as exc:
+            self.signals.done.emit(False, f"re-indexed, but the catalogue did "
+                                          f"not come back: {exc}")
+            return
+        self.signals.done.emit(
+            True, f"pushed, re-indexed and synced — {result['count']} asset(s) "
+                  "on the server")
+
+
+def after_push_async(cfg, host, hosts, on_step, on_done) -> None:
+    """Close the loop after a push: re-index, wait, sync. Never blocks the GUI."""
+    signals = AfterPushSignals()
+    signals.step.connect(on_step)
+    signals.done.connect(on_done)
+    job = AfterPushJob(cfg, host, hosts, signals)
+    job._signals_ref = signals
+    netpool.start(job)
 
 
 def health_async(hosts: list, on_done) -> None:
