@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -274,8 +275,21 @@ def died(started: Started) -> str | None:
     except OSError:
         pass
     tail = "\n".join(tail.splitlines()[-12:])
+
+    # A missing stdlib module in the BUNDLED runtime is not the tool being
+    # broken, it is the runtime not being a general Python - and the person
+    # reading "No module named 'tkinter'" has no way to know that. Say what
+    # the fix is at the moment the question is asked.
+    hint = ""
+    missing = re.search(r"No module named '([^']+)'", tail)
+    if missing and started.python == Path(sys.executable):
+        hint = (f"\n\nThe bundled runtime ships PySide6 and numpy and little "
+                f"else - it has no {missing.group(1)}. A tool that needs a "
+                f'fuller Python declares one: "python": "python" in its '
+                f"install.json, then re-import. See docs/tools.md.")
+
     return (f"{started.python} exited with code {code}, and no window opened."
-            f"\n\n{tail or 'It wrote nothing at all.'}")
+            f"\n\n{tail or 'It wrote nothing at all.'}{hint}")
 
 
 def launchable(cfg, asset) -> bool:
