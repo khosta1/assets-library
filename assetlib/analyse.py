@@ -273,9 +273,34 @@ def derived_exts(tdef: dict, cfg) -> set:
 
 def bonus_action(plan: ImportPlan, path: Path, size: int, why: str = "",
                  udim: str | None = None) -> FileAction:
+    """A file kept verbatim under extra/, at its own relative path.
+
+    The leading `extra/` is stripped before it is added back, because on an
+    EDIT the relative path already has one. `ui/edit_asset._plan_source()`
+    resolves against the package itself - deliberately, so a file already in
+    extra/ plans back to extra/ instead of being flattened - and this function
+    then prefixed a second time. The result compounded on every edit:
+
+        import  ->  extra/.gitignore
+        edit    ->  extra/extra/.gitignore
+        edit    ->  extra/extra/extra/.gitignore
+
+    It hit any type with bonus files and `verify` could not catch it, because
+    extra/ is exempt from the orphan check by invariant 14. Found on
+    script/standalone/gaussian_pointcloud_toolkit, which had been imported and
+    then edited once.
+    """
     reason = BONUS_REASON if not why else why + " - " + BONUS_REASON
-    return FileAction(path, "bonus", dest=f"extra/{plan.rel(path)}", size=size,
+    return FileAction(path, "bonus", dest=bonus_dest(plan, path), size=size,
                       reason=reason, udim=udim)
+
+
+def bonus_dest(plan: ImportPlan, path: Path) -> str:
+    """extra/<relative path>, without doubling the folder on an edit."""
+    rel = plan.rel(path)
+    if rel.startswith("extra/"):
+        rel = rel[len("extra/"):]
+    return f"extra/{rel}"
 
 
 def set_key(action: FileAction):
@@ -353,7 +378,7 @@ def rebind(plan: ImportPlan, action: FileAction, target: str, cfg) -> None:
         action.reason = "skipped by hand"
     elif target == BONUS:
         action.action, action.slot = "bonus", None
-        action.dest = f"extra/{plan.rel(action.src)}"
+        action.dest = bonus_dest(plan, action.src)
         action.reason = BONUS_REASON
     elif target == PREVIEW_TARGET:
         action.action, action.slot, action.dest = "preview", None, "preview/thumb.jpg"
