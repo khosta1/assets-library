@@ -66,7 +66,7 @@ own interpreter import the core directly.
 | `ui/sync_server.py` | the Push window — what a push would change, then the copy |
 | `ui/first_run.py`, `ui/new_library.py` | setup on a fresh copy; make a fresh copy |
 | `houdini/` | the adapter — one package file to install; `build.py` makes Karma/MTLX/Solaris nodes. See `houdini/README.md` |
-| `config/*.json` | the tree, 17 types, 107 categories, 20 texture slots — **data, not code** |
+| `config/*.json` | the tree, 18 types, 114 categories, 20 texture slots — **data, not code** |
 
 ## Run
 

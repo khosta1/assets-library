@@ -284,7 +284,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ tree
 
     def _build_tree(self) -> None:
-        # Types collapsed by default: 17 of them, 107 categories between them,
+        # Types collapsed by default: 18 of them, 114 categories between them,
         # and the declared taxonomy is a place to go looking rather than a list
         # to read. Opened all at once it is a wall no one scans.
         #

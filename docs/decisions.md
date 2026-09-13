@@ -53,7 +53,7 @@ of those appears as a row that can be overridden.
 | **`lower_snake` names** | Windows is case-insensitive, Linux is not. The day this library is read from the Rocky box, `Concrete014` and `concrete014` become two assets. |
 | **Strip resolution/format tokens from names** | `Concrete014_8K-PNG` → `concrete014`, so a future 4K version resolves to the SAME name and merges as a variant. Resolution lives in metadata as a searchable field. |
 | **LOD is a dimension, not part of the name** | Four levels are ONE asset. The token is stripped wherever a vendor put it, so all 25 files of a 4-LOD asset agree on one name, and are re-emitted as `_lodN`. |
-| **Types are DATA, not code** | 17 types in `types.json`. Adding SpeedTree/Marvelous/GAEA support = editing JSON. Only the *precedence between types* is code. |
+| **Types are DATA, not code** | 18 types in `types.json`. Adding SpeedTree/Marvelous/GAEA support = editing JSON. Only the *precedence between types* is code. |
 | **Five ingest strategies only** | `mesh_plus_textures`, `texture_set`, `single_file`, `sequence`, `folder_blob`. |
 | **Nothing is discarded — unknown files become bonus files** | Anything the library cannot interpret lands verbatim in `extra/` rather than being dropped. The user decides, not the tool. |
 | **Normalise texture filenames to slot names at import** | ambientCG `_Color.png` and Poly Haven `_diff_8k.jpg` both become `<asset>_basecolor.png`. **The guessing happens ONCE, at import.** Every adapter afterwards reads a fixed layout with zero heuristics. This is the entire payoff of an owned hierarchy. |

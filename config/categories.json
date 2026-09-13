@@ -27,6 +27,8 @@
     "ies": ["spot", "flood", "street", "architectural", "misc"],
     "reference": ["photo", "board", "video", "document", "misc"],
     "setup": ["lighting", "lookdev", "comp", "render", "fx", "template", "misc"],
+    "script": ["houdini", "maya", "blender", "nuke", "unreal", "standalone", "misc"],
+    "_script_note": "Sorted by the app that runs it, not by what it does - a tool is looked for where it can be loaded, and 'rigging' or 'export' say nothing about whether Houdini can open it. Function goes in tags.",
     "unknown": ["misc"]
   },
 

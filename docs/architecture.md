@@ -131,8 +131,8 @@ library/texture/concrete/concrete014/
 └─ extra/          bonus files, kept verbatim, never interpreted
 ```
 
-Three levels above it, always: `{type}` from `types.json` (17), `{category}`
-from the closed vocabulary in `categories.json` (107). No deeper nesting, no
+Three levels above it, always: `{type}` from `types.json` (18), `{category}`
+from the closed vocabulary in `categories.json` (114). No deeper nesting, no
 per-type exceptions.
 
 **Token order is load-bearing** (2026-09-12). The UDIM tile must remain the

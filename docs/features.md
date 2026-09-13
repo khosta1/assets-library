@@ -114,6 +114,13 @@ committed: `assetlib/derived.py` and its `build.py` hook.
   `(ext, lod, variant)` and named `<asset>_<variant>[_lodN].<ext>`. Pre-filled
   from `variant_patterns`, overridable per row in the **Var** column. `role`
   distinguishes `variant` from `exchange`.
+- **Script / tool type** (2026-09-13) — 18th root type, `folder_blob` +
+  `sidecar`, `.py .shelf .vfl .h .json .xml`, seven categories named after the
+  app that runs it. Declared LAST of the real types: `.json` and `.xml` are the
+  most generic extensions in the registry and anything earlier would claim
+  every Megascans folder off its sidecar. Blob, not single-file, because a tool
+  is a package and flattening it breaks its imports. Config only — no code
+  changed.
 - **Geometry recognised on every type** — `geometry_ext` in `types.json` routes
   19 mesh formats to `geo/` regardless of the declared type, and `geometry`
   is a binding target in its own right rather than a second name for

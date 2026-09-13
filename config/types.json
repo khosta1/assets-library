@@ -265,6 +265,21 @@
       "notes": "Not an asset you import - a setup you reopen. Lighting rigs, comp templates, shader tests, lookdev scenes."
     },
     {
+      "id": "script",
+      "label": "Script / tool",
+      "folder": "script",
+      "ingest": "folder_blob",
+      "preview": "sidecar",
+      "primary_ext": [".py", ".shelf", ".vfl", ".h", ".json", ".xml"],
+      "fields": {
+        "app": "str",
+        "app_version": "str",
+        "language": "str",
+        "entry": "str"
+      },
+      "notes": "Code, not geometry: shelf tools, wrangle snippets, pipeline scripts, exporters. Declared LAST of the real types because .json and .xml are the most generic extensions in the registry - Megascans ships a .json sidecar with every scan, and a script type placed any earlier would claim those folders before 'scan' or 'model' ever saw them. Ingest is folder_blob, never single_file: a tool is usually a package with __init__.py, an icon and a module folder, and flattening it into one file breaks the relative imports that make it run. app = houdini|maya|blender|nuke|standalone, entry = the file to run or source."
+    },
+    {
       "id": "unknown",
       "label": "Unsorted",
       "folder": "_unsorted",
