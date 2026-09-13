@@ -239,14 +239,27 @@ Everything above, as the list to check a change against. `verify.py` enforces
     `folder_blob` is the one shape where the pointer is the TREE rather than a
     file each: `fields.tree` names `src/` and everything under it travels
     unexamined.
-15. **Nothing under `library/` is ever executed by this app.** A package is
-    data. This mattered from the day a `script` type existed and became
-    load-bearing when the cloud half landed: `materialise.py` downloads
-    packages from the box, so a library that ran code an asset carried would
-    make *downloading* an asset mean *running its code*. A tool declares what
-    it needs in `install.json`; `install.py` decides what to do about it. A
-    manifest field that cannot express something is a new field and ten lines,
-    never an escape hatch that runs anything (2026-09-13).
+15. **The library never executes package content of its own accord.** A package
+    is data. No import path, no sync, no download, no background job and no
+    analysis reaches code inside `library/`. This mattered from the day a
+    `script` type existed and became load-bearing when the cloud half landed:
+    `materialise.py` downloads packages from the box, so a library that ran
+    code an asset carried would make *downloading* an asset mean *running its
+    code*. A tool declares what it needs in `install.json`; `install.py`
+    decides what to do about it. A manifest field that cannot express something
+    is a new field and ten lines, never an escape hatch that runs anything.
+
+    **The single exception is `launch.py`, and it is what the words "of its own
+    accord" are doing there** (amended 2026-09-13, at Felix's instruction). A
+    person choosing *Launch* on a named asset is that person running their own
+    tool — the same act as *Open folder* and double-clicking, one step shorter.
+    It is bounded so that it stays that act and does not become the other one:
+
+    - reached only from a context menu, never from code
+    - the module and the call are **shown and confirmed before anything runs**
+    - a DCC tool is not offered outside its DCC, because the ImportError would
+      read as a broken asset rather than as the wrong host
+    - a tool that raises is reported as the *tool* failing, not the library
 
 ---
 

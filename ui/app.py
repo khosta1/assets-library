@@ -477,6 +477,7 @@ class MainWindow(QMainWindow):
         if path is None or not path.is_dir():
             return
         tags = (row.get("tags") or "").split()
+        self._add_launch_actions(menu, row, path)
         for app in apps.installable(self.cfg, tags):
             label = (self.cfg.apps.get(app) or {}).get("label", app.title())
             for pref in install.pref_dirs(self.cfg, app):
@@ -490,6 +491,79 @@ class MainWindow(QMainWindow):
                     act.triggered.connect(
                         lambda _=False, p=pref, a=app: self._install_tool(row, p, a))
             menu.addSeparator()
+
+    def _add_launch_actions(self, menu, row, path) -> None:
+        """Launch, when there is a process this tool could actually run in.
+
+        Inside Houdini the panel IS that process, so a Houdini tool runs with no
+        install and no restart. From the standalone window only a tool that
+        needs no host is offered - a Houdini tool launched here would raise
+        ImportError on `import hou` and read as a broken asset.
+        """
+        from assetlib import launch
+        from assetlib.model import Asset
+
+        from .import_houdini import in_houdini
+
+        try:
+            asset = Asset.read(path)
+        except Exception:                               # noqa: BLE001
+            return
+        items = launch.entries(asset)
+        if not items:
+            return
+        host = in_houdini()
+        if not host and not launch.launchable(self.cfg, asset):
+            return
+
+        for item in items:
+            label = (item.get("label") or item.get("entry") or "").replace("\n", " ")
+            act = menu.addAction(
+                f"Launch {label}" + ("" if host else " (own process)") + "…")
+            act.triggered.connect(
+                lambda _=False, a=asset, p=path, i=item, h=host:
+                self._launch_tool(a, p, i, h))
+        menu.addSeparator()
+
+    def _launch_tool(self, asset, path, item, host: bool) -> None:
+        """Show what will run, then run it if confirmed.
+
+        The confirmation is not ceremony. This is the ONE place the app executes
+        package content (invariant 15), a script asset can arrive by download
+        from the box, and a person is entitled to read the module and the call
+        before either happens.
+        """
+        from assetlib import launch
+
+        try:
+            what = launch.describe(asset, path, item)
+        except Exception as exc:                        # noqa: BLE001
+            QMessageBox.critical(self, "Cannot launch", str(exc))
+            return
+
+        where = "in this Houdini session" if host else "in its own process"
+        if QMessageBox.question(
+                self, f"Launch {asset.name}?",
+                f"This will run code from the library {where}:\n\n{what}",
+                QMessageBox.Ok | QMessageBox.Cancel) != QMessageBox.Ok:
+            return
+
+        try:
+            if host:
+                launch.in_process(asset, path, item)
+            else:
+                launch.as_subprocess(asset, path, item)
+        except launch.LaunchError as exc:
+            QMessageBox.critical(self, "Could not launch", str(exc))
+            return
+        except Exception as exc:                        # noqa: BLE001
+            # A tool that raises is the TOOL's failure, not the library's, and
+            # saying so is what stops the library being blamed for it.
+            QMessageBox.critical(
+                self, f"{asset.name} raised",
+                f"The tool started and then failed:\n\n{type(exc).__name__}: {exc}")
+            return
+        self.statusBar().showMessage(f"launched {asset.name}")
 
     def _install_tool(self, row, pref_dir, app: str) -> None:
         from assetlib.model import Asset
