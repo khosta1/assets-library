@@ -929,6 +929,56 @@ def _plan_blob(plan: ImportPlan, files, cfg) -> None:
 
     plan.fields["files"] = len(plan.kept)
     plan.fields["tree"] = BLOB_DIR
+    _record_tool(plan, files, cfg)
+
+
+def _record_tool(plan: ImportPlan, files, cfg) -> None:
+    """What this blob needs in order to be installed, if it is a tool.
+
+    Two sources, and the order is the point. The tool author's own
+    `install.json` wins, because they know which module is meant to be launched;
+    autodetect is the fallback for a tool that ships no manifest. Scanning the
+    Manager_tool suite proposes FIVE entry points when exactly one is meant to
+    be called - the manifest says one.
+
+    Either way this is a PRE-FILL. The Add window shows the tags and the entry
+    rows and the person keeps, edits or deletes them; `asset.json` is what
+    install.py reads afterwards. Neither a manifest nor a regex decides.
+    """
+    from . import apps
+
+    manifest = apps.read_manifest(files, plan.source)
+    if manifest is not None:
+        found = apps.from_manifest(manifest, plan.source)
+        # Every path the manifest gave was relative to itself and is now
+        # relative to the SOURCE; the tree lands under src/, so one more hop.
+        for item in found.get("shelf") or []:
+            item["entry"] = f"{BLOB_DIR}/{item['entry']}"
+        plan.fields["shelf"] = found.get("shelf") or []
+        plan.fields["otls"] = [f"{BLOB_DIR}/{p}" for p in found.get("otls") or []]
+        plan.fields["pythonpath"] = [f"{BLOB_DIR}/{p}"
+                                     for p in found.get("pythonpath") or []]
+        plan.fields["app_tags"] = found.get("tags") or apps.detect(files, cfg, plan.source)
+        plan.warnings.append(
+            f"{apps.MANIFEST} found - entries and paths come from it, not from "
+            "a guess")
+        return
+
+    plan.fields["app_tags"] = apps.detect(files, cfg, plan.source)
+    proposed = apps.entries(files, plan.source)
+    plan.fields["shelf"] = [{**e, "entry": f"{BLOB_DIR}/{e['entry']}"}
+                            for e in proposed]
+    plan.fields["otls"] = sorted({
+        f"{BLOB_DIR}/{Path(plan.rel(f)).parent.as_posix()}"
+        for f in files if f.suffix.lower() in (".hda", ".otl", ".hdanc", ".hdalc")
+    })
+    if len(proposed) > 1:
+        # Said out loud because it is the number a person must reduce. Five
+        # buttons for a suite with one launcher is the shape of the mistake.
+        plan.warnings.append(
+            f"{len(proposed)} possible entry point(s) found by scanning - keep "
+            f"the ones that should become shelf buttons, delete the rest, or "
+            f"ship an {apps.MANIFEST}")
 
 
 def matcher_preview(path: Path, plan: ImportPlan, cfg) -> bool:

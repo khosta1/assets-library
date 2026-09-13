@@ -20,6 +20,7 @@ and a rule never will.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -135,6 +136,94 @@ def detect(files, cfg, base: Path | None = None) -> list:
             hits.append(app)
 
     return [tag(a) for a in hits] or [tag(FALLBACK)]
+
+
+MANIFEST = "install.json"
+
+
+def read_manifest(files, base: Path | None = None) -> dict | None:
+    """The tool author's own declaration, if the source ships one.
+
+    Better than anything guessed, and that is the whole reason it exists: the
+    person who wrote the tool knows which module is meant to be launched, and a
+    regex looking for `def show()` does not. Scanning the Manager_tool suite
+    proposed FIVE entries when exactly one is meant to be called.
+
+    **Read as data and never executed.** A script asset can arrive by download
+    now - the box is the master and `materialise.py` pulls packages from it -
+    so a library that ran code an asset carried would turn "download an asset"
+    into "run its code". Nothing under library/ is ever executed by this app.
+    The manifest says what the tool needs; the library decides what to do about
+    it.
+
+    Shallowest wins. A vendor tree can contain several `install.json` files -
+    one per sub-tool, or one in a bundled dependency - and the one describing
+    THIS asset is the one nearest its root.
+    """
+    found = None
+    depth = None
+    for path in (Path(f) for f in files):
+        if path.name.lower() != MANIFEST:
+            continue
+        try:
+            rel = path.relative_to(base) if base else Path(path.name)
+        except ValueError:
+            rel = Path(path.name)
+        if depth is None or len(rel.parts) < depth:
+            found, depth = path, len(rel.parts)
+    if found is None:
+        return None
+    try:
+        with found.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        # A malformed manifest is reported by the caller as a warning and the
+        # import continues on autodetect. A tool is not un-importable because
+        # its metadata has a trailing comma.
+        return None
+    if not isinstance(data, dict):
+        return None
+    data["_manifest"] = found
+    data["_root"] = found.parent
+    return data
+
+
+def from_manifest(data: dict, base: Path) -> dict:
+    """Manifest -> the fields `asset.json` stores, with paths made asset-relative.
+
+    The manifest writes paths relative to ITSELF, because that is what the tool
+    author can see; the library stores them relative to the package, which is
+    what `install.py` needs. That translation happens once, here, so neither
+    side has to think about the other's layout.
+    """
+    root = data.get("_root") or base
+    try:
+        prefix = Path(root).relative_to(base).as_posix()
+    except (ValueError, TypeError):
+        prefix = ""
+    prefix = f"{prefix}/" if prefix and prefix != "." else ""
+
+    def under(value: str) -> str:
+        return f"{prefix}{str(value).strip().replace(chr(92), '/').strip('/')}"
+
+    shelf = []
+    for item in data.get("shelf") or []:
+        if not isinstance(item, dict) or not item.get("entry"):
+            continue
+        shelf.append({
+            "entry": under(item["entry"]),
+            "callable": (item.get("callable") or "show").strip(),
+            "label": item.get("label") or Path(item["entry"]).stem,
+            "icon": item.get("icon") or "MISC_python",
+        })
+
+    out = {"shelf": shelf,
+           "otls": [under(p) for p in (data.get("otls") or [])],
+           "pythonpath": [under(p) for p in (data.get("pythonpath") or [])]}
+    app = (data.get("app") or "").strip().lower()
+    if app:
+        out["tags"] = [tag(app)]
+    return out
 
 
 def entries(files, base: Path) -> list:
