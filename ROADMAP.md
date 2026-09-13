@@ -4,8 +4,11 @@
 
 **Consuming the library**
 - `A1` Houdini adapter — **done 2026-09-12**, `houdini/`
-- `A2` USD + `.tx` / `.rat` generation into `derived/`
+- `A2` USD + `.tx` / `.rat` generation into `derived/` — **`.rat` done
+  2026-09-13** (`fb379c6`), `.tx` and `.usda` not started
 - `A3` Maya, Blender, Unreal adapters
+- `A4` USD variant sets built from the library's variant bindings, not from a
+  cooked probe — see Phase 3b
 
 **Filling the library**
 - `B1` bulk migration — **batch importer built 2026-09-12**, nothing imported
@@ -86,16 +89,56 @@ flipped from blue to local. Felix: "everything is working as intended."
 Also landed alongside it: first-run panel, *Create a new library…*, Desktop
 shortcut and icon, and `pythonw` launching with no console at all.
 
-### Phase 3 — `A2` derived formats — **started 2026-09-13, uncommitted**
+### Phase 3 — `A2` derived formats — **`.rat` done 2026-09-13** (`fb379c6`)
 
 `.tx` / `.rat` / `.usda` into `derived/`, regenerable and never backed up.
 
-`assetlib/derived.py` (281 lines) + the `build.py` hook in `textures_for()`, so
-Karma is handed a `.rat` instead of converting a `.jpg` into `tex/` itself —
-which is where the 25 `verify` warnings came from. The *Use .rat textures*
-checkbox in `import_houdini.py` and `ui/bake.py` (batch pre-bake) close the
-loop. **None of it is committed**, and it is not known to have been run inside
-Houdini. `.usda` is untouched.
+`assetlib/derived.py` + the `build.py` hook in `textures_for()`, so Karma is
+handed a `.rat` instead of converting a `.jpg` into `tex/` itself — which is
+where the 25 `verify` warnings came from. The *Use .rat textures* checkbox in
+`import_houdini.py` and `ui/bake.py` (batch pre-bake, off the GUI thread) close
+the loop. Verified from the library side: 6 maps in 1.0 s, re-runs skip, zero
+new `verify` warnings.
+
+**Still open on it:** never run inside Houdini, so whether Karma is happy with
+these files is unproven. `.tx` has a converter wired (`hoiiotool`) and no
+caller. `.usda` is untouched. `derived/` has no size budget — same shape as the
+`_cache/` gap, and a `.rat` is ~3× its source.
+
+### Phase 3b — `A4` variant sets from the bindings — *not started*
+
+The library now knows about variants properly, and Houdini does not use that.
+
+**Today:** `_distinct_variant_names()` cooks a throwaway `file`→`unpack`
+network in `/obj` purely to read the `name` prim attribute *inside one
+geometry file*, and a variant set is built from whatever strings come back.
+Separately, a real multi-file variant — `thatching_grass` ships
+`_vara.fbx` … `_vark.fbx` — is built as **eleven independent component
+chains**, one `componentoutput` each, all sharing one material.
+
+**Wanted:** one component with an eleven-entry USD variant set, built from
+`asset.representations[].variant`.
+
+The machinery already exists and is proven —
+`_build_sop_karma_component_variants()` collects N `componentgeometry` nodes
+into a `componentgeometryvariants` LOP. It only takes its N from a cooked probe
+instead of from `asset.json`. What changes is the source of the list, not the
+node graph.
+
+Why it is worth doing:
+
+- **No probe cook.** Building and destroying a SOP network to read an attribute
+  is the last piece of filename/geometry guessing left in the adapter, and it
+  is exactly what `A1` deleted a thousand lines of elsewhere.
+- **The names are better.** `vara`…`vark` were recorded at import with a person
+  confirming them (the Var column), and they survive in `asset.json`. A cooked
+  `name` attribute is whatever the vendor happened to call a piece.
+- **One material instead of eleven**, and one prim for a scatter to pick a
+  variant from — which is what a variant set is *for*.
+
+Note the two are not the same thing and both should survive: prim `name` pieces
+are variants *inside* one file, bindings are variants *across* files. The Import
+dialog already says so in its own tooltip. An asset can plausibly have both.
 
 ### Phase 4 — `B1` bulk migration — **started 2026-09-13, FabLibrary done**
 
