@@ -113,7 +113,9 @@ the pattern and reported line numbers without reading what surrounded them. A
 grep hit is a location, not a fact.
 
 **Next.** Felix in Houdini: open the panel, double-click the `main_ui` tile.
-The asset exists and is sound on disk; what has never happened is a launch.
+The asset exists and is sound on disk; what has never happened is an
+in-process launch. *(Answered in part within the hour: the STANDALONE route
+ran — `point_clean_tool`, the first tool this library has launched.)*
 
 **Written after the entry.** `docs/tools.md` — the author-facing contract, so a
 tool can be made importable without reading `analyse.py` — and

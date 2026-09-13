@@ -45,7 +45,19 @@ committed.
   in **that** process: no install, no restart, nothing written outside
   `library/`. From the standalone window only a tool needing no host is
   offered. The module and the call are shown and confirmed first — this is the
-  single exception to invariant 15. *Never run inside Houdini yet.*
+  single exception to invariant 15. **First confirmed launch 2026-09-13**:
+  `point_clean_tool`, a tkinter tool, opened from the standalone window — the
+  first tool this library has ever run. *The in-process route, inside Houdini,
+  is still unrun.*
+- **A tool can name the interpreter it needs** — `"python"` in `install.json`
+  (2026-09-13). The bundled runtime ships PySide6 and numpy and no tcl/tk, so a
+  tkinter tool cannot run in it at all. A bare name is resolved on PATH at
+  launch rather than stored as a path, because the asset syncs to a shared
+  master. Declaring it also routes the launch out of process, host or not.
+- **A launch that dies is reported** — the child is created with no console, so
+  a tool that failed its first import looked exactly like one that started.
+  Output goes to a log, read back 1.5 s later from the event loop; a missing
+  module plus the bundled interpreter adds what the runtime actually ships.
 
 - **Remote catalogue** — `assetlib/remote.py` + `catalog.py`. Library ▸ *Remote
   libraries…* declares a server; **Shift+F5** syncs `/api/catalog` into
