@@ -13,9 +13,11 @@ REMOVED    deleted, listed so it does not get reinvented
 
 `ROADMAP.md` is what is being BUILT. This file is what EXISTS.
 
-Last brought in line: **2026-09-12**. **8 317 lines** - 6 785 in
-`assetlib`+`ui`, 1 532 in `houdini/` - and the library holds 75
-assets and verifies clean apart from three orphan warnings (see `ROADMAP.md`).
+Last brought in line: **2026-09-13**. **12 368 lines** - 10 816 in
+`assetlib`+`ui`, 1 552 in `houdini/` - and the library holds **111** assets,
+43.75 GB, the same 111 the box holds. `verify` warnings are the `.rat` strays
+and `smudgeslarge001` listed in `ROADMAP.md`. Two things counted here are NOT
+committed: `assetlib/derived.py` and its `build.py` hook.
 
 ---
 
@@ -32,6 +34,27 @@ assets and verifies clean apart from three orphan warnings (see `ROADMAP.md`).
   Manifest first, cost shown before anything starts, `.part` + `Range` resume,
   hash-verified, into `_cache/{type}/{category}/{asset}/` **keeping the uuid**.
   Full package or hero LOD + one resolution. Proven end to end 2026-09-13.
+- **Push to a server** — `assetlib/sync.py` + `ui/sync_server.py`. Library ▸
+  *Push this library to a server…*: reads `asset.json` on both sides over SMB
+  and groups the answer by verdict — **add**, **changed**, **moved**, and
+  **on the server, not here**. A move is carried out as a rename on the share,
+  so a re-categorised 1 GB asset costs nothing. A package is copied into a
+  `.partial-` sibling and renamed into place, so an interrupted transfer never
+  leaves a half-written package on the master. Nothing in a push deletes an
+  asset.
+- **Admin read off the share, never granted** — `sync.probe()` writes and
+  removes one file in `library/` on the share. Write access means the Send
+  button pushes; refusal means it copies into `_inbox/` on the server instead,
+  which is the add-only path for anyone not on Samba's `write list`
+  (gotcha 19).
+- **Removing one asset from a server** — admin only, one at a time, the name
+  typed to confirm, and it is a rename into `_trash/` on the share rather than
+  a delete. Files an update leaves behind go the same way.
+- **Re-index over SSH** — `sync.reindex()` runs
+  `sudo -n systemctl start --no-block assetlib-reindex` with `BatchMode=yes`,
+  so the box rebuilds its catalogue after a push and a missing NOPASSWD rule
+  fails in a legible second instead of waiting on a password prompt nobody can
+  answer.
 - **Cloud tiles** — blue ground and outline for assets that are on a server and
   not on this disk, and a `☁ Cloud` toggle that hides them. `cache` is not
   marked: it is here.
@@ -40,8 +63,10 @@ assets and verifies clean apart from three orphan warnings (see `ROADMAP.md`).
   Desktop shortcut. Skip is remembered.
 - **Create a new library…** — `assetlib/deploy.py` + `ui/new_library.py`.
   Copies the app and its runtime (~293 MB) to another disk, no assets, no
-  index, no token; can carry the server ADDRESS so the new copy asks only for
-  the token.
+  index, no token; carries every way of REACHING the server — address, SMB
+  share, SSH account — so the new copy can browse and push with only the token
+  typed in. `first_run` shows the address and keeps the other two silently
+  (2026-09-13).
 - **Desktop shortcut with the app icon** — `assetlib/shortcut.py`, written via
   `wscript.exe` so no console appears; `ui/resources/asset_library.ico`.
 - **No console on launch** — `Asset Library.vbs` starts `pythonw.exe` directly;

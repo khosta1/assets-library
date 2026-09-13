@@ -4,6 +4,7 @@ _inbox/
 _quarantine/
 .assetlib/
 seed.log
+push.log
 __pycache__/
 *.pyc
 Concrete/

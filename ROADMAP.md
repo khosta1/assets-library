@@ -58,7 +58,8 @@ guessing left behind because `asset.json` already answers it. Right-click an
 asset → *Import to Houdini*. Confirmed building nodes.
 
 Still open on it: no geometry format ranking (see *Open bugs*), `derived/`
-empty so Karma reads `.png` rather than `.rat`, and only Karma is wired —
+empty until `A2`'s uncommitted `derived.py` is finished and proven in Houdini,
+and only Karma is wired —
 Arnold and Redshift would need a second mapping table, which is config.
 
 ### Phase 2b — `C1` the cloud library — **done 2026-09-13**
@@ -85,10 +86,16 @@ flipped from blue to local. Felix: "everything is working as intended."
 Also landed alongside it: first-run panel, *Create a new library…*, Desktop
 shortcut and icon, and `pythonw` launching with no console at all.
 
-### Phase 3 — `A2` derived formats — *~1 week*
+### Phase 3 — `A2` derived formats — **started 2026-09-13, uncommitted**
 
 `.tx` / `.rat` / `.usda` into `derived/`, regenerable and never backed up.
-Blocked on nothing; more useful once `A1` exists to consume it.
+
+`assetlib/derived.py` (281 lines) + the `build.py` hook in `textures_for()`, so
+Karma is handed a `.rat` instead of converting a `.jpg` into `tex/` itself —
+which is where the 25 `verify` warnings came from. The *Use .rat textures*
+checkbox in `import_houdini.py` and `ui/bake.py` (batch pre-bake) close the
+loop. **None of it is committed**, and it is not known to have been run inside
+Houdini. `.usda` is untouched.
 
 ### Phase 4 — `B1` bulk migration — **started 2026-09-13, FabLibrary done**
 
@@ -156,6 +163,43 @@ thing in front rather than the thing being deferred.
 
 **Open from 2026-09-13** (the cloud work; the rest of that session's list was
 closed by the J: run):
+
+**The push tool has read the share and never written to it.** `assetlib/sync.py`
++ `ui/sync_server.py`. `probe()` and `diff()` ran against `Y:\assets` on
+2026-09-13: admin `True`, 1.6 s, 222 packages, **111 local and 111 remote, no
+verdicts, no skips** — both sides already agree, because Felix robocopied the 36
+across at 01:53. So `push`, `drop`, `discard`, move-as-rename, the `.partial-`
+rename and `reindex` are **unexercised on real data**. Before the first real
+push:
+
+- **The Samba stanzas are not applied.** The whole admin gate is
+  `read only = yes` + `write list = felix` on the library share, plus a second
+  writable share as the drop box — and that is on the box, which is the server
+  panel's side of the fence. Until it is applied, every LAN account has write
+  access and `sync.probe()` will report admin for all of them.
+- **Whether `sudo -n systemctl start assetlib-reindex` works over SSH is
+  unknown.** The box has three NOPASSWD exceptions and nobody checked whether
+  this unit is one. If it is not, the Re-index button fails in a second and
+  shows the command to run by hand — which is the intended fallback, not a bug,
+  but it should be confirmed rather than assumed.
+- **`_trash/` on the server has no sweep and no budget.** Same shape as the
+  `_cache/` problem below, on a disk that matters more. Nothing empties it; it
+  is meant to be emptied on purpose, by a person, and nothing yet reminds
+  anyone that it exists.
+- **The drop box has no promotion step.** A contributor can copy a package into
+  `_inbox/` on the server; moving it into `library/` is a manual act with no
+  tool behind it and no verification of what arrived.
+- **The `.rat` work is wired end to end and none of it is committed.**
+  `assetlib/derived.py`, the `build.py` hook, the *Use .rat textures* checkbox
+  in `import_houdini.py`, and `ui/bake.py` for the batch pre-bake. Not known to
+  have been run inside Houdini, so the 25 `.rat` strays in `tex/` are addressed
+  in code and not yet observed to stop appearing.
+- **The scan reads one `asset.json` per package over SMB, both sides.**
+  Measured 2026-09-13: 1.6 s for 222 packages. It is linear, and at a few
+  thousand it will not be.
+  `/api/catalog` is the obvious pre-filter and was deliberately not used — a
+  catalogue rebuilt daily is a stale answer to "what is on the server", and
+  deciding to overwrite on a stale row is the failure this was built to avoid.
 
 - **`_cache/` has no size budget.** Raised and deliberately deferred. Unbounded
   growth on a portable drive, which is exactly where it will be used. The

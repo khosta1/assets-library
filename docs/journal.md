@@ -4,7 +4,105 @@ Newest first.
 
 ---
 
-## 2026-09-13 (last) — B1 starts, and stepping earns its keep
+## 2026-09-13 (last) — the push, and who is allowed to make it
+
+Third entry today. The one below is `B1`; this is the way back up to the box,
+and the gate on it.
+
+**Done.**
+
+- **`assetlib/sync.py`** (new, 640 lines) — pushes this library onto the
+  master over SMB, diffing by **uuid** on both sides. Four verdicts: `add`,
+  `update`, `move`, `missing`. A move is `os.replace` on the share, so a
+  re-categorised 1 GB asset costs nothing. A package is copied into a
+  `.partial-` sibling and renamed into place. No Qt, no `hou`.
+- **`ui/sync_server.py`** (new, 380 lines) — *Library ▸ Push this library to a
+  server…*: the plan grouped by verdict, `missing` last and uncheckable,
+  progress and cancel, scan and copy both off the GUI thread.
+- **`probe()` reads the permission and never grants one** — writes and removes
+  one file in `library/` on the share. Write access → the Send button pushes;
+  refusal → it copies into `_inbox/` instead, which is the add-only path.
+- **Removal is separate** — one asset, admin only, the name typed to confirm,
+  and it is a rename into `_trash/`. Files an update leaves behind go the same
+  way. Nothing in this module deletes.
+- **`sync.reindex()`** — `ssh -o BatchMode=yes … sudo -n systemctl start
+  --no-block assetlib-reindex`, so a missing NOPASSWD rule fails in a legible
+  second instead of waiting on a prompt nobody can answer.
+- **`Host` gains `share` and `ssh`**, stored beside the token in
+  `.assetlib/remote/hosts.json`; two more columns in *Remote libraries*.
+- **A new library inherits all three** — `deploy.suggest_host()` carries
+  address, share and SSH account, never the token; `first_run` keeps the two it
+  does not show. A fresh copy is asked for one thing and can then browse **and**
+  push.
+- **Docs** — `decisions.md` § *Pushing onto the master* + four rejected rows,
+  gotcha **19**, `architecture.md` § **7c the master join**, `features.md`,
+  `ROADMAP.md`.
+- **Measured against the real share** (`Y:\assets`, read-only): admin `True`,
+  **1.6 s**, 222 packages read, **111 local and 111 remote, no verdicts and no
+  skips**. Both sides already agree — which closes the previous entry's *Next*.
+  It was closed by Felix's own robocopy at 01:53 (`push.log`, 4.3 GB copied, no
+  `/MIR`, no `/PURGE`), not by this tool.
+- **Not mine, uncommitted, earlier the same day:** `assetlib/derived.py` (281
+  lines) and the `build.py` hook that hands Karma a `.rat` instead of a `.jpg`
+  — the answer to the 25 `verify` warnings in the entry below. State in *Open*.
+
+**Decided.** A push **diffs by uuid, not by path**, because a path is not an
+identity here — a mirror turns a re-categorisation into a re-upload plus a
+delete (`decisions.md` § *Pushing onto the master*; `robocopy /MIR` is in the
+rejected table). **Admin is an SMB account, not a setting**: an app-side
+password or a `config/` flag is a lie that looks like a lock when anyone
+holding the disk can edit JSON, so the gate is Samba's `write list` and the app
+only reads which side of it this account is on. The unix alternative is in
+gotcha **19** — a sticky bit on an ntfs-3g mount succeeds and grants nothing.
+**No upload route on the API**: Felix, asked directly — LAN/SMB is enough, and
+read-only is what keeps a leaked token from damaging 1.7 TB. `first_run` shows
+the address but **not** the share and SSH fields, carrying them silently,
+because that panel asks the one thing it cannot know and two already-correct
+boxes would make it read as a form.
+
+**Open.**
+
+- **`sync.py` has never written to a share.** Only `probe()` and `diff()` have
+  run against `Y:\assets`. `push`, `drop`, `discard`, the move-as-rename, the
+  `.partial-` rename and `reindex` are **unexercised on real data** — they
+  compile, they import, and that is all that is known. A shakeout script
+  against a throwaway share in the scratchpad was written and **Felix stopped
+  it before it ran** ("ok everything working"); the scratchpad is disposable, so
+  nothing of it survives. Do not rebuild it unless asked.
+- **The Samba stanzas are not applied on the box.** The entire admin gate is
+  `read only = yes` + `write list = felix` on the library share plus a second
+  writable share as the drop box, and until that is in `smb.conf` **every LAN
+  account probes as admin** — the app currently tells the truth about a gate
+  that does not exist. That is server-panel territory.
+- **Whether `sudo -n systemctl start assetlib-reindex` works over SSH is
+  unknown.** The box has three NOPASSWD exceptions; nobody checked whether this
+  unit is one. If not, the button fails in a second and prints the command,
+  which is the intended fallback and not a bug.
+- **The `.rat` work is complete and uncommitted.** Four files, none of them
+  tracked: `assetlib/derived.py`, the `build.py` hook in `textures_for()`, the
+  *Use .rat textures* checkbox in `import_houdini.py` (two flags — `derived` is
+  whether to USE a bake, `bake` whether to MAKE a missing one), and `ui/bake.py`
+  + `app.py:454` for the batch pre-bake. Felix wired the last two while this
+  entry was being written, which is why an earlier draft of it called them
+  missing. **Not known to have been run inside Houdini.** `.usda` untouched.
+- **`_trash/` on the server has no sweep and no budget** — same shape as the
+  `_cache/` problem, on the disk that matters more.
+- **The drop box has no promotion step** — a contributor can copy into
+  `_inbox/`; moving it into `library/` is manual, with nothing verifying what
+  arrived.
+- **The scan is linear**: one `asset.json` per package, both sides. 1.6 s at
+  222. `/api/catalog` is the obvious pre-filter and was deliberately refused —
+  a catalogue rebuilt daily is a stale answer to "what is on the server".
+- **`push.log` is untracked at the repo root** — Felix's robocopy log, 124 KB.
+  Delete it or gitignore it; it is not ours.
+
+**Next.** Apply the two Samba stanzas on the box and confirm `probe()` reports
+**not** admin from a second account. Everything written today about who may
+delete is true only once that is in `smb.conf`.
+
+---
+
+## 2026-09-13 (later) — B1 starts, and stepping earns its keep
 
 Second entry today. The one below is the cloud library; this is the bulk
 migration that followed it.
