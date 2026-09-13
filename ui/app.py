@@ -131,7 +131,10 @@ class MainWindow(QMainWindow):
         self.detail.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.view_btn = QPushButton("Contents…")
         self.view_btn.setEnabled(False)
-        self.view_btn.setToolTip("Look inside the package - double-clicking a tile does the same")
+        self.view_btn.setToolTip(
+            "Look inside the package - every file, labelled by its role.\n"
+            "Double-clicking a tile does the same, EXCEPT on a tool, where it "
+            "launches.")
         self.view_btn.clicked.connect(self._view_asset)
 
         self.edit_btn = QPushButton("Edit…")
@@ -822,17 +825,66 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"imported {dialog.added} asset(s)")
 
     def _open_selected(self) -> None:
-        """Double-click. Means "show me this asset" - which differs by origin.
+        """Double-click. Means "open this", and what that IS differs by asset.
 
-        On a local asset that is Contents. On a cloud one there is nothing to
-        show yet, and the useful answer to "show me this" is the window that
-        says what it would cost to have it.
+        A texture has no verb of its own, so opening it means looking inside -
+        Contents. A cloud asset has nothing to look inside yet, so it means the
+        window that says what having it would cost. And a TOOL has an obvious
+        verb that neither of those has: run it. Double-clicking a tool to read a
+        file listing is the answer to a question nobody asked.
+
+        Falls back to Contents whenever launching is not possible - a Houdini
+        tool double-clicked in the standalone window, a tool with no entry - so
+        the gesture never does nothing.
         """
         row = self._current_row()
-        if row and self._host_for(row) is not None:
+        if not row:
+            return
+        if self._host_for(row) is not None:
             self._import_remote()
             return
+        # Tested on the ROW before touching disk. The window does not walk the
+        # filesystem during interaction, and reading an asset.json to decide
+        # what a double-click means would do exactly that for every texture in
+        # the library. Only a row already carrying an app: tag is worth opening.
+        if "app:" in (row.get("tags") or "") and self._launch_by_default(row):
+            return
         self._view_asset()
+
+    def _launch_by_default(self, row) -> bool:
+        """Launch this tool if there is a process to launch it in. True if done."""
+        from assetlib import launch
+        from assetlib.model import Asset
+
+        from .import_houdini import in_houdini
+
+        path = self.cfg.asset_path(row)
+        if path is None or not path.is_dir():
+            return False
+        try:
+            asset = Asset.read(path)
+        except Exception:                               # noqa: BLE001
+            return False
+
+        items = launch.entries(asset)
+        host = in_houdini()
+        if not items or (not host and not launch.launchable(self.cfg, asset)):
+            return False
+
+        item = items[0]
+        if len(items) > 1:
+            # A pack of several tools has no single "the" tool, and picking the
+            # first would be a coin toss dressed as a default.
+            labels = [(i.get("label") or i.get("entry") or "").replace("\n", " ")
+                      for i in items]
+            choice, ok = QInputDialog.getItem(
+                self, f"Launch from {asset.name}", "Tool:", labels, 0, False)
+            if not ok:
+                return True                 # cancelled IS the answer to the click
+            item = items[labels.index(choice)]
+
+        self._launch_tool(asset, path, item, host)
+        return True
 
     def _host_for(self, row):
         """The server a cloud row came from, or None if it is not a cloud row."""
