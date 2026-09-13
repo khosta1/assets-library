@@ -51,16 +51,38 @@ def apps_of(tags) -> list:
     return [a for a in found if a]
 
 
-def installable(cfg, tags) -> list:
-    """The apps this asset declares that the library can actually install into.
+def unresolved(asset, asset_dir: Path) -> list:
+    """Declared paths that are not in the package. Empty when the asset is sound.
 
-    An app with `install: null` is configured and not implemented - it shows no
-    button and says nothing. That is deliberate: an asset tagged for Maya is
-    still correctly tagged, searchable and openable, and inventing a Maya
-    installer to avoid an empty space would be writing code nobody asked for.
+    A manifest is written by hand against a source tree, and what gets imported
+    is a choice made later in the Add window - so the two can disagree, and
+    nothing noticed. It was found the hard way: an asset holding only its
+    manifest and no code imported cleanly, and the failure surfaced three steps
+    later as "src/Main_ui/manager_ui.py is not in the package".
+
+    The opposite direction from `verify`'s orphan check, which walks files and
+    asks whether a pointer exists; this walks pointers and asks whether a file
+    does. Neither finds the other's defect.
+
+    Written for the Houdini installer, which was removed the same day
+    (`docs/History/houdini-package-install-removed.md`). It moved here rather
+    than going with it: the check is about a manifest being honest, which is
+    this module's subject, and `verify` needs it whether anything installs or
+    not.
     """
-    return [a for a in apps_of(tags)
-            if (cfg.apps.get(a) or {}).get("install")]
+    asset_dir = Path(asset_dir)
+    out = []
+    for item in asset.fields.get("shelf") or []:
+        entry = (item.get("entry") or "").strip()
+        if entry and not (asset_dir / entry).is_file():
+            out.append(f"shelf entry: {entry}")
+    for rel in asset.fields.get("otls") or []:
+        if rel and not (asset_dir / rel).is_dir():
+            out.append(f"otls: {rel}")
+    for rel in asset.fields.get("pythonpath") or []:
+        if rel and not (asset_dir / rel).is_dir():
+            out.append(f"pythonpath: {rel}")
+    return out
 
 
 # ------------------------------------------------------------------- detect

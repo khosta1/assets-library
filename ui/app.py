@@ -23,7 +23,6 @@ from PySide6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QInputDialog,
 
 from assetlib import catalog
 from assetlib import index as idx
-from assetlib import install
 from assetlib import remote
 from assetlib import shortcut
 from assetlib import upgrade
@@ -466,34 +465,20 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ remote
 
-    def _add_install_actions(self, menu, row) -> None:
-        """Install / Uninstall, only for a tool that can actually be installed.
+    def _add_tool_actions(self, menu, row) -> None:
+        """What a tool offers. Launch, and nothing else.
 
-        Driven by the asset's `app:` tags and by which of those the library has
-        an installer for. A tool tagged app:maya gets no entry and no greyed-out
-        promise, because Maya's installer is not written - `config/apps.json`
-        says `install: null` and that is the honest answer, not a bug.
+        There was an Install here for one day, writing a package file into
+        Houdini's preferences. It went once Launch worked: inside Houdini the
+        library window IS a Python Panel, so launching runs the tool in the
+        process it wants, with no restart and nothing written outside
+        `library/`. See `docs/History/houdini-package-install-removed.md` -
+        including the one thing it could do that this cannot.
         """
-        from assetlib import apps
-
         path = self.cfg.asset_path(row)
         if path is None or not path.is_dir():
             return
-        tags = (row.get("tags") or "").split()
         self._add_launch_actions(menu, row, path)
-        for app in apps.installable(self.cfg, tags):
-            label = (self.cfg.apps.get(app) or {}).get("label", app.title())
-            for pref in install.pref_dirs(self.cfg, app):
-                where = pref.name
-                if install.package_path(pref, row["name"]).is_file():
-                    act = menu.addAction(f"Uninstall from {label} {where}")
-                    act.triggered.connect(
-                        lambda _=False, p=pref: self._uninstall_tool(row, p))
-                else:
-                    act = menu.addAction(f"Install to {label} {where}…")
-                    act.triggered.connect(
-                        lambda _=False, p=pref, a=app: self._install_tool(row, p, a))
-            menu.addSeparator()
 
     def _add_launch_actions(self, menu, row, path) -> None:
         """Launch, when there is a process this tool could actually run in.
@@ -567,37 +552,6 @@ class MainWindow(QMainWindow):
                 f"The tool started and then failed:\n\n{type(exc).__name__}: {exc}")
             return
         self.statusBar().showMessage(f"launched {asset.name}")
-
-    def _install_tool(self, row, pref_dir, app: str) -> None:
-        from assetlib.model import Asset
-
-        path = self.cfg.asset_path(row)
-        try:
-            asset = Asset.read(path)
-            result = install.install(self.cfg, asset, path, pref_dir, app)
-        except Exception as exc:                        # noqa: BLE001
-            QMessageBox.critical(self, "Could not install", str(exc))
-            return
-        QMessageBox.information(
-            self, "Installed",
-            f"{row['name']} installed into {pref_dir.name}.\n\n"
-            f"{result['tools']} shelf tool(s).\n"
-            f"Package: {result['package']}\n\n"
-            "Restart Houdini, or load the shelf from Shelves ▸ Shelf Sets.")
-        self.statusBar().showMessage(f"installed {row['name']} -> {pref_dir.name}")
-
-    def _uninstall_tool(self, row, pref_dir) -> None:
-        try:
-            gone = install.uninstall(self.cfg, row["name"], pref_dir)
-        except Exception as exc:                        # noqa: BLE001
-            QMessageBox.critical(self, "Could not uninstall", str(exc))
-            return
-        # The asset itself is untouched - only the package file goes. Said out
-        # loud because "uninstall" in most applications means "delete", and here
-        # it deliberately does not.
-        self.statusBar().showMessage(
-            f"{row['name']} removed from {pref_dir.name} - the asset is still "
-            "in the library" if gone else "nothing to remove")
 
     def _bake_selected(self) -> None:
         """Pre-bake .rat for the selected assets. Lazily imported, like the rest.
@@ -1103,7 +1057,7 @@ class MainWindow(QMainWindow):
             return
 
         menu = QMenu(self)
-        self._add_install_actions(menu, row)
+        self._add_tool_actions(menu, row)
         if self._host_for(row) is not None:
             # First, and alone at the top: on a cloud asset it is the only
             # entry that can do anything. Contents and Edit need files.

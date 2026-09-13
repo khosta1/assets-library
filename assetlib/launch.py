@@ -1,9 +1,14 @@
-"""Running a tool out of the library, without installing it first.
+"""Running a tool out of the library.
 
-Install is for a tool you want on a shelf tomorrow. Launch is for one you want
-open now - and inside Houdini it is the better of the two, because a Python
-Panel is already the process the tool wants to run in: no package file, no
-restart, and nothing written outside `library/`.
+The only way a tool is used. Inside Houdini the library window IS a Python
+Panel, which is already the process the tool wants to run in - so launching
+imports the module and calls it there: no package file, no restart, nothing
+written outside `library/`.
+
+A package-file installer existed for one day and was removed once this worked;
+the argument and the one thing it could do that this cannot - putting a tool's
+HDAs on HOUDINI_OTLSCAN_PATH, which is read at startup - are in
+`docs/History/houdini-package-install-removed.md`.
 
 **This is the one place the app runs package content, and only ever because a
 person asked it to.** Invariant 15 says nothing under `library/` is executed by
@@ -46,9 +51,9 @@ def entries(asset) -> list:
 def search_paths(asset, asset_dir: Path) -> list:
     """Folders the tool needs on sys.path, package root first.
 
-    The same list `install.package_json` puts on PYTHONPATH, so a launched tool
-    and an installed one resolve their imports identically. A tool that works
-    one way and not the other would be worse than one that does not work.
+    Package root first, then whatever the manifest declared, then each entry's
+    own folder - the suite's modules sit one level down and import each other by
+    bare name, which is what a tool's own sys.path lines were compensating for.
     """
     asset_dir = Path(asset_dir)
     out = [asset_dir]

@@ -163,7 +163,7 @@ def verify(cfg, deep: bool = False) -> list:
         # opposite direction - a pointer with nothing under it. An asset whose
         # shelf entry is missing installs cleanly and fails at the first click,
         # a long way from the cause.
-        from .install import unresolved
+        from .apps import unresolved
 
         for miss in unresolved(asset, asset_dir):
             problems.append(("error", str(rel), f"declares a path that is not "

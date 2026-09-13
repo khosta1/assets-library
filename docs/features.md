@@ -31,21 +31,20 @@ committed: `assetlib/derived.py` and its `build.py` hook.
   rejected* to *51 kept, 0 rejected*.
 - **App tags decide what a tool can do** — `app:houdini`, `app:maya`,
   `app:standalone`. Tags and not the category, because a tool can target two
-  applications. `config/apps.json` holds the per-app regime; an app with
-  `install: null` shows no button, which is the honest answer rather than a
-  greyed-out promise.
+  applications. `config/apps.json` holds the per-app detection; the tags
+  decide whether a tool can be launched outside its host - a Houdini tool
+  cannot, because it imports `hou`.
 - **`install.json`, written by the tool author** — entry points, `pythonpath`,
   `otls`, read at import as the prefill. Autodetect is the fallback and is
   weaker than it looks: scanning for `def show()` proposed **five** entries for
   a suite with one launcher, because these tools do their work at module level.
   Read as **data, never executed** (invariant 15).
-- **Install to Houdini** — one package JSON in
-  `$HOUDINI_USER_PREF_DIR/packages/` plus a generated shelf inside the asset.
-  One menu entry per installed version; flips to *Uninstall* when present.
-  Nothing of the user's is edited, and uninstall deletes one file and leaves
-  the asset in the library. HDAs are found where they are via
-  `HOUDINI_OTLSCAN_PATH`, never moved. *Emitted and parsed; no button has been
-  clicked inside Houdini yet.*
+- **Launch a tool from the library** — right-click, or double-click the tile.
+  Inside Houdini the window is a Python Panel, so the tool is imported and run
+  in **that** process: no install, no restart, nothing written outside
+  `library/`. From the standalone window only a tool needing no host is
+  offered. The module and the call are shown and confirmed first — this is the
+  single exception to invariant 15. *Never run inside Houdini yet.*
 
 - **Remote catalogue** — `assetlib/remote.py` + `catalog.py`. Library ▸ *Remote
   libraries…* declares a server; **Shift+F5** syncs `/api/catalog` into
@@ -191,6 +190,16 @@ one.
 ---
 
 ## REMOVED — do not reinvent
+
+- **Installing a tool into Houdini as a package** — built and removed
+  2026-09-13, the same day. One JSON into `$HOUDINI_USER_PREF_DIR/packages/`
+  plus a generated shelf inside the asset. Removed because *Launch* does the
+  same job better from inside a Python Panel, with no restart and nothing
+  written outside `library/`. **The one thing it could do that Launch cannot is
+  put a tool's HDAs on `HOUDINI_OTLSCAN_PATH`**, which is read at startup — so
+  the day someone declares `otls`, this is the thing to reconsider. Argument,
+  emitted shapes and what survived:
+  `docs/History/houdini-package-install-removed.md`.
 
 - **The command line** — `assetlib/cli.py` and `requirements.txt`, deleted
   2026-08-21. Its real job was forcing the core to stay UI-free, and that is
