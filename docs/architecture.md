@@ -252,6 +252,49 @@ there would write a second digest algorithm into the library.
 
 ---
 
+## 7c. The master join
+
+Added **2026-09-13**.
+
+> **The box is the master; this folder is a client. What crosses between them
+> is an asset identified by its uuid, never a path.**
+
+Three separate crossings, and they do not share a transport because they do not
+share a shape:
+
+| direction | how | what moves |
+|---|---|---|
+| catalogue, box → here | HTTP `/api/catalog`, ETag-diffed | rows |
+| files, box → here | HTTP `/api/file`, `Range`-resumable | into `_cache/` |
+| **assets, here → box** | **SMB on the LAN, `assetlib/sync.py`** | into `library/` |
+
+The upward crossing is the one added here. It is a file copy rather than an
+API call because the API is read-only by decision, and it diffs by **uuid** on
+both sides, read from `asset.json` rather than from either index — the local
+one is a cache and the box's is rebuilt daily, so neither is a safe basis for
+overwriting or removing anything (invariant 1, applied outward).
+
+Four verdicts come out of that diff, and the fourth is the point:
+
+```
+add     uuid not on the master        copy the package
+update  same uuid, contents differ    copy the changed files
+move    same uuid, different path     RENAME on the share - no bytes
+missing uuid on the master, not here  report it, and stop
+```
+
+**RULE.** A push adds, updates and moves. It never deletes. Removing an asset
+from the master is a separate act, one asset at a time, and it is a rename into
+`_trash/` (invariant 7).
+
+**RULE.** Permission is read, never granted. `sync.probe()` writes one file to
+the share to find out whether `smbd` allows it; Samba's `write list` is the
+gate, and the app reports its answer rather than keeping a flag of its own. The
+add-only path for everyone else is a second, writable share used as a drop box
+— a share definition rather than a rule this app is trusted to keep.
+
+---
+
 ## 8. Where the seams are
 
 As of **2026-09-12**.

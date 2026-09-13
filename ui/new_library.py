@@ -55,7 +55,7 @@ class _CopyJob(QRunnable):
                 on_file=lambda d, t, n: self.signals.progress.emit(d, t, n),
                 should_stop=lambda: self._stop)
             if self.host is not None and not result["cancelled"]:
-                deploy.suggest_host(self.dest, self.host.name, self.host.url)
+                deploy.suggest_host(self.dest, self.host)
         except Exception as exc:                        # noqa: BLE001
             self.signals.failed.emit(f"{type(exc).__name__}: {exc}")
             return
@@ -95,12 +95,16 @@ class NewLibraryDialog(QDialog):
             "somebody who just wants to browse assets.")
         self.dev_box.toggled.connect(self._revalidate)
 
-        self.host_box = QCheckBox("Include the server address (never the token)")
+        self.host_box = QCheckBox(
+            "Include how to reach the server — address, share, SSH "
+            "(never the token)")
         self.host_box.setChecked(bool(self._first_host()))
         self.host_box.setEnabled(bool(self._first_host()))
         self.host_box.setToolTip(
-            "The new copy will ask for the token on first launch, with the "
-            "address already filled in. Give the token separately.")
+            "The new copy will ask for the token on first launch and nothing "
+            "else: the address, the SMB share and the SSH account are filled "
+            "in already, so it can browse AND push without any of the three "
+            "being retyped. Give the token separately.")
 
         self.size_label = QLabel("")
         self.bar = QProgressBar()

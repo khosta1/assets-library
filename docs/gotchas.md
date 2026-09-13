@@ -304,3 +304,44 @@ under a windowless interpreter that time is invisible. Anything that waits on
 another machine needs a stop flag it checks itself — nothing outside it can
 interrupt a socket read — and a hard exit as the backstop.
 
+
+---
+
+**19. The unix way to say "add but not delete" does not exist on this disk**
+— 2026-09-13
+
+The library on the box lives on `/srv/data2`, an NTFS disk mounted by
+ntfs-3g. The obvious way to let friends contribute without letting them wipe
+the library is the one every unix admin reaches for: write permission on the
+directory plus the sticky bit, so a user may create files and may only delete
+their own.
+
+It cannot work there. ntfs-3g is FUSE and maps the whole tree to a single
+uid/gid — there is no per-file ownership for a sticky bit to compare against,
+so "their own" has no meaning and the bit protects nothing. The same is true of
+every plan built on POSIX ACLs on that mount.
+
+**What does work is Samba's own check**, because it happens in `smbd`, above
+the filesystem, before `open()` is ever called:
+
+```ini
+[assets]
+   path = /srv/data2/assets
+   read only = yes
+   write list = felix          # the entire admin gate
+```
+
+A non-listed account is refused at the SMB protocol with `ACCESS_DENIED` and
+never reaches the disk, whatever the disk's permissions say. Add-only for
+everyone else is then a *second share* pointing at a drop box, not a
+permission bit on the library.
+
+**Why this is worth a number:** the failure mode is not an error. Setting the
+sticky bit on an ntfs-3g mount succeeds — `chmod +t` returns 0 and `ls` shows
+the `t` — and grants exactly nothing. A gate that looks applied and is not is
+worse than no gate, because nobody checks it again.
+
+The app reads the answer rather than deciding it: `sync.probe()` writes a
+temporary file into `library/` on the share and removes it. A permission read
+would have answered about the filesystem, which is the layer that does not
+know.

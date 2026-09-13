@@ -135,14 +135,19 @@ def copy_install(src: Path, dest: Path, include_dev: bool = False,
             "cancelled": False, "dest": dest}
 
 
-def suggest_host(dest: Path, name: str, url: str) -> None:
-    """Leave the server's ADDRESS in the new copy, and never its token.
+def suggest_host(dest: Path, host) -> None:
+    """Leave every way of REACHING the server in the new copy, and never its token.
 
-    So the person receiving it is asked for one thing instead of three, and the
-    credential is handed over separately - by voice, by message, by anything
-    that is not a drive left on a desk. `first_run` treats a host with no token
-    as "not configured yet" for exactly this reason, so the setup panel still
-    appears with the address already filled in.
+    The address, the SMB share and the SSH account all travel: none of them is
+    a secret, all three are typed wrongly the first time, and a copy that knows
+    two of the three still cannot push. What does not travel is the token - so
+    the person receiving the disk is asked for one thing instead of four, and
+    the credential is handed over separately, by voice or by message, by
+    anything that is not a drive left on a desk.
+
+    `first_run` treats a host with no token as "not configured yet" for exactly
+    this reason, so the setup panel still appears, with everything it can know
+    already filled in.
     """
     from . import remote
 
@@ -152,4 +157,6 @@ def suggest_host(dest: Path, name: str, url: str) -> None:
     cfg = _Base()
     cfg.state = Path(dest) / ".assetlib"
     cfg.remote_dir = lambda: cfg.state / "remote"
-    remote.save_hosts(cfg, [remote.Host(name=name, url=url, token="")])
+    remote.save_hosts(cfg, [remote.Host(
+        name=host.name, url=host.url, token="",
+        share=host.share, ssh=host.ssh)])

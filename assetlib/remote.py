@@ -72,6 +72,12 @@ class Host:
     token: str = ""
     enabled: bool = True
     etag: str = ""                      # last catalogue seen, for If-None-Match
+    # The other two ways to reach the same box, and they are deliberately not
+    # derived from `url`: the API is answered over ZeroTier and the share over
+    # the LAN, so they are different addresses for one machine. Both are
+    # optional - a server that is only ever browsed needs neither.
+    share: str = ""                     # \\host\data2\assets - holds library/
+    ssh: str = ""                       # felix@192.168.1.13, to re-index
     fields: dict = field(default_factory=dict)
 
     def endpoint(self, *parts: str) -> str:
@@ -111,7 +117,7 @@ def load_hosts(cfg) -> list:
         return []
     out, taken = [], set()
     for entry in raw.get("hosts", []):
-        known = {"name", "url", "token", "enabled", "etag"}
+        known = {"name", "url", "token", "enabled", "etag", "share", "ssh"}
         name = entry.get("name", "remote")
         # The name is the catalogue's FILENAME, so two hosts sharing one is two
         # hosts sharing one database. They do not merge, they fight: each sync
@@ -128,6 +134,8 @@ def load_hosts(cfg) -> list:
             token=entry.get("token", ""),
             enabled=bool(entry.get("enabled", True)),
             etag=entry.get("etag", ""),
+            share=entry.get("share", ""),
+            ssh=entry.get("ssh", ""),
             fields={k: v for k, v in entry.items() if k not in known},
         ))
     return out
@@ -138,7 +146,8 @@ def save_hosts(cfg, hosts: list) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"hosts": [
         {"name": h.name, "url": h.url, "token": h.token,
-         "enabled": h.enabled, "etag": h.etag, **h.fields}
+         "enabled": h.enabled, "etag": h.etag,
+         "share": h.share, "ssh": h.ssh, **h.fields}
         for h in hosts
     ]}
     tmp = path.with_suffix(".tmp")

@@ -120,6 +120,85 @@ chance to delete an argument by mistake.
 
 ---
 
+## Pushing onto the master
+
+Taken **2026-09-13**, after the local library kept growing past the seed.
+
+> **A push is a diff by uuid, not a mirror by path. It adds, updates and moves.
+> It never deletes.**
+
+The box is the master and its API is read-only, so the only way an asset gets
+onto it is a file copy over SMB on the LAN. The tempting tool is
+`robocopy /MIR`, and it is the wrong one for a reason that is structural rather
+than a matter of flags: a path is not an identity here. Re-categorising an
+asset changes `library/{type}/{category}/{asset}` while the asset stays the
+same asset — same uuid, same `asset.json`. A mirror sees a new path and a
+missing old one, and answers by re-uploading gigabytes and then deleting the
+original.
+
+Diffing by uuid turns the same edit into **a rename on the share**: zero bytes
+on the wire for a 1 GB asset that moved from `rock/` to `ground/`. And it turns
+"on the server, not on this disk" into a **report** instead of a deletion,
+which is the half that matters — the library is 1.7 TB with no off-site copy,
+and a local `library/` that someone tidied out must not be able to take the
+master with it.
+
+**Both sides are read from disk, not from an index.** `asset.json` is truth and
+`index.db` is a cache (invariant 1); the box re-indexes daily, so a diff taken
+against `/api/catalog` would be a diff against yesterday. Overwriting or
+removing 38 GB on the strength of a stale row is not a trade worth making. The
+cost is one `asset.json` read per package over SMB, and the `hashes` dict makes
+the rest of the comparison free for everything that did not change.
+
+**Removal exists, and it is deliberately not part of a sync.** One asset at a
+time, admin only, the name typed to confirm, and it is a rename into `_trash/`
+on the share rather than a delete. Invariant 7 applies with more force on the
+master than anywhere else.
+
+### Who may do it is decided by smbd, not by the app
+
+> **Admin is an SMB account, not a setting. The app reads the permission; it
+> never grants one.**
+
+The alternative — a flag in `config/`, or a password the app checks — was
+rejected for being a lie that looks like a lock. Anyone holding the folder can
+edit a JSON file, and a portable library is *designed* to be held by whoever
+has the disk. What the app would be enforcing is its own good manners.
+
+So the gate is the share:
+
+```ini
+[assets]        read only = yes,  write list = felix     # the library
+[assets-inbox]  read only = no                           # the drop box
+```
+
+`smbd` refuses a non-listed account at the protocol, before a syscall reaches
+the disk, and no local setting changes that answer. `sync.probe()` writes a
+temporary file into `library/` on the share to find out which side of that line
+this account is on, and the window says so in words. Note that the unix
+alternative — a sticky bit, so others may create but not delete — **cannot**
+work here: the library sits on ntfs-3g, which has no per-file ownership, and
+setting the bit succeeds while granting nothing (gotcha 19).
+
+Contributors therefore add through a **drop box**: a second, writable share
+that is not the library. Whoever promotes a package out of it decides the
+library changed. "They can add but not delete" is then a share definition
+rather than a rule this app is trusted to keep — and it keeps holding when the
+app is not the thing doing the copying.
+
+### What this supersedes
+
+`server/client-contract.md` §"Importing INTO the cloud library" describes the
+path as: mount the share, point the library root at it, import as usual, leave
+`roots.state` local. That still works and is still the fastest way to put a
+vendor dump straight onto the box. It is no longer the only way, and it is not
+the one to use for a library that has already been imported locally — pointing
+the root at the share does not move what is already under `library/`, and it
+cannot express a move at all. `server/` is owned by the server-panel side, so
+that file is left for them to amend.
+
+---
+
 ## Rejected — do not reopen
 
 | Idea | Why it was rejected | When |
@@ -131,6 +210,10 @@ chance to delete an argument by mistake.
 | SHA-256 for file digests | This is duplicate detection, not security. xxh3 is ~10× faster over terabytes. | 2026-08-20 |
 | Shipping the app as a single frozen `.exe` (PyInstaller / Nuitka) | It is the obvious answer to "a beginner should be able to install this", and it breaks the seam the whole architecture is built on: `houdini/` puts `$ASSETLIB` on PYTHONPATH so Houdini's own interpreter does `import assetlib`, and a frozen bundle has no importable `assetlib/` on disk. The source would have to ship anyway, leaving a second copy of the app free to drift from the first. Practically also 150–250 MB, a visible unpack-to-temp on every launch, and SmartScreen on anything unsigned — worse friction for a beginner than the folder it replaces. What was built instead: a first-run setup panel, *Create a new library…*, and a Desktop shortcut. | 2026-09-13 |
 | Two entries for one server, one per address (LAN and ZeroTier) | It looks like sensible redundancy and it corrupts a catalogue: the host name IS the database filename, so both map to `rocky.db`. They do not merge, they fight — each sync wipes the other's rows while keeping its own ETag, so the next sync gets a 304 and reports "unchanged" over a catalogue that was deleted. Now refused on save and de-duplicated on load. If one box ever genuinely needs two addresses, it is one host with a fallback URL list, not two hosts. | 2026-09-13 |
+| `robocopy /MIR` to keep the server's library in step with this one | It is the tool everyone reaches for and it mirrors PATHS. A path is not an identity here: re-categorising an asset keeps its uuid and changes its path, so a mirror re-uploads gigabytes and then deletes the original — and an asset removed from this disk is deleted from the master, which holds the only copy of 1.7 TB. `assetlib/sync.py` diffs by uuid instead: a move becomes a rename on the share, and "missing here" becomes a line in a report. | 2026-09-13 |
+| An app-side admin password or `config/` flag gating destructive edits | A lie that looks like a lock. Anyone holding the folder can edit a JSON file, and a portable library is designed to be held by whoever has the disk — the app would be enforcing its own good manners. The gate is Samba's `write list` on the box, which `smbd` applies before a syscall reaches the disk; `sync.probe()` only reads which side of it this account is on. | 2026-09-13 |
+| A sticky bit (or POSIX ACLs) on the server's `library/`, so friends may add but not delete | The unix answer, and it cannot work on that disk: ntfs-3g maps the whole tree to one uid, so there is no per-file ownership for the bit to compare against. `chmod +t` succeeds and grants nothing — a gate that looks applied and is not (gotcha 19). Add-only is a second, writable share used as a drop box instead. | 2026-09-13 |
+| An upload route on the API, so a push works from outside the LAN | Felix, asked directly: LAN/SMB is enough. It would reopen "the API is read-only", which is what keeps a token leak from being able to damage 1.7 TB that has no off-site copy. Reconsider only when pushing from outside the LAN is a real need, and reopen the decision in writing first. | 2026-09-13 |
 
 ---
 

@@ -24,7 +24,20 @@ from assetlib import catalog, remote
 
 from . import netpool
 
-COLUMNS = ("Name", "URL", "Token")
+NOTE = ("Catalogue only — no asset files are downloaded here.   "
+        "Share and SSH are needed only to push this library onto a server.")
+
+# Name/URL/Token are the browse half; Share/SSH are the push half. One row per
+# BOX, not per protocol: the same machine answers HTTP over ZeroTier, SMB on
+# the LAN and ssh for the re-index, and three records for one address is three
+# places for it to go stale.
+COLUMNS = ("Name", "URL", "Token", "Share (SMB)", "SSH")
+
+HINTS = {
+    3: ("The folder on the server that HOLDS library/ - "
+        r"e.g. \\192.168.1.13\data2\assets"),
+    4: "felix@192.168.1.13 - used only to ask the box to re-index after a push",
+}
 
 
 # ------------------------------------------------------------------- the job
@@ -150,10 +163,12 @@ class RemoteLibrariesDialog(QDialog):
         self.cfg = cfg
         self.hosts = list(hosts)
         self.setWindowTitle("Remote libraries")
-        self.resize(760, 320)
+        self.resize(980, 320)
 
         self.table = QTableWidget(0, len(COLUMNS), self)
         self.table.setHorizontalHeaderLabels(COLUMNS)
+        for column, hint in HINTS.items():
+            self.table.horizontalHeaderItem(column).setToolTip(hint)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         # Same rule as the Add window: a bare click must not start an editor,
         # or selecting a row to delete it opens a cell instead (gotcha 16).
@@ -164,6 +179,8 @@ class RemoteLibrariesDialog(QDialog):
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
 
         for host in self.hosts:
             self._append_row(host)
@@ -176,7 +193,7 @@ class RemoteLibrariesDialog(QDialog):
         test.setToolTip("Ask /api/health. Downloads nothing.")
         test.clicked.connect(self._test)
 
-        self.note = QLabel("Catalogue only — no asset files are downloaded here.")
+        self.note = QLabel(NOTE)
         self.note.setWordWrap(True)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -200,7 +217,8 @@ class RemoteLibrariesDialog(QDialog):
     def _append_row(self, host: remote.Host) -> None:
         r = self.table.rowCount()
         self.table.insertRow(r)
-        for column, value in enumerate((host.name, host.url, host.token)):
+        for column, value in enumerate((host.name, host.url, host.token,
+                                        host.share, host.ssh)):
             self.table.setItem(r, column, QTableWidgetItem(value))
 
     def _add(self) -> None:
@@ -220,6 +238,7 @@ class RemoteLibrariesDialog(QDialog):
                 return (item.text() if item else "").strip()
 
             name, url, token = cell(0), cell(1), cell(2)
+            share, ssh = cell(3), cell(4)
             if not name or not url:
                 continue
             was = existing.get(name)
@@ -227,6 +246,7 @@ class RemoteLibrariesDialog(QDialog):
             # sync re-download a catalogue the client already has, every time
             # anyone opened this window.
             out.append(remote.Host(name=name, url=url, token=token,
+                                   share=share, ssh=ssh,
                                    etag=was.etag if was else "",
                                    enabled=was.enabled if was else True))
         return out
@@ -243,7 +263,7 @@ class RemoteLibrariesDialog(QDialog):
         health_async(picked, self._tested)
 
     def _tested(self, results: list) -> None:
-        self.note.setText("Catalogue only — no asset files are downloaded here.")
+        self.note.setText(NOTE)
         lines = [f"{'✓' if ok else '✗'}  {name}: {message}"
                  for name, ok, message in results]
         QMessageBox.information(self, "Remote libraries", "\n".join(lines))

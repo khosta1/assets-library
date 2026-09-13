@@ -29,7 +29,7 @@ between the layers, marks design rules **RULE**, and ends with the
 
 ## The code
 
-11 063 lines. `ui/` and `houdini/` import `assetlib`;
+12 368 lines. `ui/` and `houdini/` import `assetlib`;
 **`assetlib` imports no Qt and no `hou`** — that rule is what lets Houdini's
 own interpreter import the core directly.
 
@@ -47,6 +47,7 @@ own interpreter import the core directly.
 | `assetlib/index.py` | SQLite + FTS5, search filters, counts |
 | `assetlib/verify.py` | invariant checks |
 | `assetlib/remote.py` | HTTP client for a server — **stdlib `urllib`, no Qt** |
+| `assetlib/sync.py` | push this library onto the master over SMB — diffs by **uuid**, never deletes |
 | `assetlib/catalog.py` | syncs a remote catalogue into `.assetlib/remote/<host>.db` |
 | `assetlib/materialise.py` | download an asset into `_cache/` — **never imports `commit.py`** |
 | `assetlib/deploy.py` | what travels when a new library copy is made |
@@ -62,6 +63,7 @@ own interpreter import the core directly.
 | `ui/gridmodel.py`, `ui/thumbcache.py`, `ui/writepool.py` | grid model + tile delegate, preview cache, single-threaded write pool |
 | `ui/netpool.py` | the 3 threads that talk to a server, and the shutdown that must not hang (gotcha 18) |
 | `ui/remote_libraries.py`, `ui/import_remote.py` | declare a server; download one asset |
+| `ui/sync_server.py` | the Push window — what a push would change, then the copy |
 | `ui/first_run.py`, `ui/new_library.py` | setup on a fresh copy; make a fresh copy |
 | `houdini/` | the adapter — one package file to install; `build.py` makes Karma/MTLX/Solaris nodes. See `houdini/README.md` |
 | `config/*.json` | the tree, 17 types, 107 categories, 20 texture slots — **data, not code** |

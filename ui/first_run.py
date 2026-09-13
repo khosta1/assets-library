@@ -107,8 +107,10 @@ class FirstRunDialog(QDialog):
         explain.setWordWrap(True)
 
         # Prefilled when the copy was made by "Create a new library…", which
-        # leaves the address behind and never the token. Then the only empty
-        # field on screen is the one only a person can supply.
+        # leaves behind every way of REACHING the server and never the token.
+        # Then the only empty field on screen is the one only a person can
+        # supply.
+        self.suggested = suggested
         self.name = QLineEdit(suggested.name if suggested else "rocky")
         self.url = QLineEdit(suggested.url if suggested else "")
         self.url.setPlaceholderText("http://10.209.73.177:8083")
@@ -176,11 +178,21 @@ class FirstRunDialog(QDialog):
     # --------------------------------------------------------------- actions
 
     def _host(self):
+        """The server as declared here, plus what the copy already knew.
+
+        The share and the SSH account are carried through rather than shown.
+        This panel asks for the one thing it cannot know, and two more fields
+        that are already correct would make it look like a form rather than a
+        question. They are editable afterwards in Library > Remote libraries.
+        """
         name = self.name.text().strip()
         url = self.url.text().strip()
         if not name or not url:
             return None
-        return remote.Host(name=name, url=url, token=self.token.text().strip())
+        prior = self.suggested
+        return remote.Host(name=name, url=url, token=self.token.text().strip(),
+                           share=prior.share if prior else "",
+                           ssh=prior.ssh if prior else "")
 
     def _test(self) -> None:
         from .remote_libraries import health_async
