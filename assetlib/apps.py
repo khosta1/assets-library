@@ -1,0 +1,173 @@
+"""Which applications a script asset targets, and how it reaches them.
+
+A script is the first asset type the library does not merely STORE. A rock is
+finished when it is in the tree; a tool is finished when the application it was
+written for can find it. Every application finds things differently, so the
+differences live in `config/apps.json` and this module reads them.
+
+**Tags, not category.** An asset declares its targets as `app:houdini`,
+`app:maya`, `app:standalone`. The category is one folder and stays the primary
+app; the tags are many, because a Python library used from both Houdini and Maya
+is one asset with two of them, and the tags are what decide which buttons
+appear.
+
+**Detection is a pre-fill and never a decision** - the same rule as
+`variant_patterns` and `guess_category`. What is found here is shown as editable
+chips in the Add window and the person keeps, adds or removes them. A pattern
+that looks right and is wrong is exactly the mistake someone catches at a glance
+and a rule never will.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+PREFIX = "app:"
+FALLBACK = "standalone"
+
+# Read for import lines only. A 200 KB module is not worth scanning to the end
+# to learn something its first page always says, and `import hou` under a
+# function is still in the first page of the file that needs it.
+HEAD_BYTES = 8192
+
+TEXT_EXTS = {".py", ".txt", ".mel", ".json", ".shelf", ".xml", ".vfl"}
+
+
+def tag(app: str) -> str:
+    return f"{PREFIX}{app}"
+
+
+def app_of(tag_value: str) -> str | None:
+    """'app:houdini' -> 'houdini'. None for any other tag."""
+    return tag_value[len(PREFIX):] if tag_value.startswith(PREFIX) else None
+
+
+def apps_of(tags) -> list:
+    """Every application an asset declares, in config order."""
+    found = {app_of(t) for t in (tags or [])}
+    found.discard(None)
+    return [a for a in found if a]
+
+
+def installable(cfg, tags) -> list:
+    """The apps this asset declares that the library can actually install into.
+
+    An app with `install: null` is configured and not implemented - it shows no
+    button and says nothing. That is deliberate: an asset tagged for Maya is
+    still correctly tagged, searchable and openable, and inventing a Maya
+    installer to avoid an empty space would be writing code nobody asked for.
+    """
+    return [a for a in apps_of(tags)
+            if (cfg.apps.get(a) or {}).get("install")]
+
+
+# ------------------------------------------------------------------- detect
+
+
+def _imports_in(path: Path, modules) -> bool:
+    """True when the head of this file imports one of `modules`.
+
+    Matched as an import STATEMENT, not as a substring. 'hou' appears inside
+    'house', 'hound' and every third variable name in a file about housing, and
+    a substring test would tag half the library for Houdini.
+    """
+    try:
+        head = path.read_text(encoding="utf-8", errors="ignore")[:HEAD_BYTES]
+    except OSError:
+        return False
+    for module in modules:
+        root = re.escape(module.split(".")[0])
+        rest = re.escape(module)
+        if re.search(rf"^\s*(?:import\s+{rest}|from\s+{rest}\b|"
+                     rf"import\s+{root}\b.*\b{rest}\b)", head, re.M):
+            return True
+    return False
+
+
+def detect(files, cfg, base: Path | None = None) -> list:
+    """Tags proposed for these source files, most specific first.
+
+    Three signals, any one of which is enough, because vendors ship tools in all
+    three shapes: an extension only that application uses, an import of its
+    Python module, or a folder name it looks for by convention.
+
+    `base` matters and is not optional in practice. Folder names are matched
+    against the path INSIDE the asset, never the absolute one: Manager_tool
+    lives at H:/3D/Maya/Scripts/..., so matching the full path tagged it
+    app:maya because Maya's convention list contains "scripts". Every tool in
+    that tree would have been tagged for Maya, on the strength of where Felix
+    happens to keep his scripts.
+
+    Always returns at least `app:standalone` - every tool runs somewhere, and an
+    asset with no app tag would show no buttons and no explanation for why.
+    """
+    files = [Path(f) for f in files]
+    exts = {f.suffix.lower() for f in files}
+
+    def inside(f: Path) -> Path:
+        if base is None:
+            return Path(f.name)
+        try:
+            return f.relative_to(base)
+        except ValueError:
+            return Path(f.name)
+
+    rel_paths = [inside(f) for f in files]
+    parts = {p.lower() for r in rel_paths for p in r.parts[:-1]}
+    rels = {"/".join(r.parts[:-1]).lower() for r in rel_paths}
+
+    hits = []
+    for app, spec in cfg.apps.items():
+        if app == FALLBACK:
+            continue
+        det = spec.get("detect") or {}
+        if exts & {e.lower() for e in det.get("extensions", [])}:
+            hits.append(app)
+            continue
+        folders = {d.lower() for d in det.get("folders", [])}
+        if folders & parts or folders & rels:
+            hits.append(app)
+            continue
+        modules = det.get("imports") or []
+        if modules and any(f.suffix.lower() in TEXT_EXTS and _imports_in(f, modules)
+                           for f in files):
+            hits.append(app)
+
+    return [tag(a) for a in hits] or [tag(FALLBACK)]
+
+
+def entries(files, base: Path) -> list:
+    """Shelf entries PROPOSED for this asset: [{entry, callable, label}].
+
+    Zero, one or many - a tool pack of five unrelated utilities gets five
+    buttons and a library with no UI gets none. Proposed only: the Add window
+    shows them as rows to keep, edit or delete, and `asset.json` is what
+    install.py reads afterwards. Scanning is how the rows are offered, never how
+    they are decided.
+
+    A module is a candidate when it defines a zero-argument `show()`, `launch()`
+    or `main()` at top level - the three names this kind of tool uses for "open
+    my window", and all three are what Main_ui.txt calls.
+    """
+    out = []
+    for path in sorted(Path(f) for f in files):
+        if path.suffix.lower() != ".py":
+            continue
+        try:
+            head = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        found = re.search(r"^def\s+(show|launch|main)\s*\(\s*\)", head, re.M)
+        if not found:
+            continue
+        try:
+            rel = path.relative_to(base).as_posix()
+        except ValueError:
+            rel = path.name
+        out.append({
+            "entry": rel,
+            "callable": found.group(1),
+            "label": path.stem.replace("_", " ").title(),
+        })
+    return out

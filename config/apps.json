@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "_note": "Which application a script asset targets, how it is detected, and how it gets installed there. A script is the first asset type the library does not merely STORE - it has to end up somewhere an application will find it - and every application finds things differently. This file is that difference, as data.",
+
+  "_tags": "An asset declares its targets as tags: app:houdini, app:maya, app:standalone. Tags and not the category, because the category is one folder and a tool can target two applications - a Python library used from both Houdini and Maya is one asset with two tags. The category stays the PRIMARY app, so the tree still reads.",
+
+  "_autodetect": "`detect` patterns are a PRE-FILL, never a decision - the same rule as variant_patterns and guess_category. The Add window shows the detected tags as editable chips and the person keeps, adds or removes them. A pattern that looks right and is wrong is exactly the mistake someone catches at a glance and a rule never will.",
+
+  "_install": "`install` names the mechanism, which is code in assetlib/install.py - one small writer per value, not a template engine. An app whose install is not implemented yet simply shows no button; the asset still imports, is searchable, and can be opened in Explorer. Adding an application is a row here plus one writer.",
+
+  "apps": {
+    "houdini": {
+      "label": "Houdini",
+      "install": "package",
+      "detect": {
+        "extensions": [".hda", ".otl", ".hdanc", ".hdalc", ".shelf", ".pypanel", ".hip", ".hiplc", ".hipnc", ".vfl"],
+        "imports": ["hou", "husd", "toolutils", "pdg", "loputils"],
+        "folders": ["otls", "toolbar", "python_panels", "scripts/python"]
+      },
+      "_install_note": "A package JSON in $HOUDINI_USER_PREF_DIR/packages/ whose `path` points at the asset package. Houdini then contributes that package's toolbar/, python_panels/ and otls/ by itself. This is how THIS project installs itself (houdini/packages/assets_library.json) and how the eleven third-party packages already on this machine do it - FLOPs, Megascans, RenderMan, Octane. Install writes one file; uninstall deletes it; nothing of the user's is edited.",
+      "pref_dirs": ["houdini22.0", "houdini21.0", "houdini20.5"],
+      "_pref_dirs": "Under the user's documents folder on Windows. Several versions are normally installed and an asset is installed into ONE of them, chosen at install time - a .py is version-agnostic but an .hda is not, and an H22 asset silently failing to load in H20.5 is worse than not offering it."
+    },
+
+    "maya": {
+      "label": "Maya",
+      "install": null,
+      "detect": {
+        "extensions": [".mel", ".ma", ".mb"],
+        "imports": ["maya.cmds", "maya.OpenMaya", "pymel", "maya.mel"],
+        "folders": ["scripts", "shelves", "plug-ins"]
+      },
+      "_install_note": "Not written yet. Maya has no package mechanism: it means a line in userSetup.py plus a shelf .mel in prefs/shelves, which EDITS files the user owns. That is a different promise from Houdini's and deserves its own decision rather than being assumed."
+    },
+
+    "blender": {
+      "label": "Blender",
+      "install": null,
+      "detect": {
+        "extensions": [".blend"],
+        "imports": ["bpy", "bmesh", "mathutils"],
+        "folders": ["addons"]
+      },
+      "_install_note": "Not written yet. An addon is a zip Blender installs itself, or a folder dropped into scripts/addons."
+    },
+
+    "nuke": {
+      "label": "Nuke",
+      "install": null,
+      "detect": {
+        "extensions": [".nk", ".gizmo"],
+        "imports": ["nuke", "nukescripts"],
+        "folders": ["gizmos"]
+      },
+      "_install_note": "Not written yet. A line in ~/.nuke/menu.py, which is again a file the user owns."
+    },
+
+    "unreal": {
+      "label": "Unreal",
+      "install": null,
+      "detect": {
+        "extensions": [".uplugin", ".uasset"],
+        "imports": ["unreal"],
+        "folders": ["Plugins", "Content"]
+      },
+      "_install_note": "Not written yet."
+    },
+
+    "standalone": {
+      "label": "Standalone",
+      "install": null,
+      "detect": {},
+      "_install_note": "Deliberately none, and not a gap. A standalone tool is run from its own folder or a .bat; there is no host to install into, so the asset offers Open folder and nothing else. This is the fallback when no other app is detected."
+    }
+  }
+}

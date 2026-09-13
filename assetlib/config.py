@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-CONFIG_FILES = ("library", "types", "categories", "texture_slots")
+CONFIG_FILES = ("library", "types", "categories", "texture_slots", "apps")
 
 # Where an asset physically is. Carried on every index row and every Houdini
 # request, because "library/{type}/{category}/{asset}" stopped being enough the
@@ -51,6 +51,7 @@ class Config:
         self.categories = raw["categories"]["categories"]
         self.category_rules = raw["categories"].get("rules", {})
         self.slots_cfg = raw["texture_slots"]
+        self.apps = raw["apps"]["apps"]
 
         roots = self.library_cfg["roots"]
         self.library = self.base / roots["library"]
