@@ -4,7 +4,83 @@ Newest first.
 
 ---
 
-## 2026-09-13 (last) — the push, and who is allowed to make it
+## 2026-09-13 (last) — derived/ stops being empty, and a progress bar that lied
+
+Fourth entry today. `A2`, the re-index that closed the previous entry's *Next*,
+and a context-pack set that had quietly stopped describing the project.
+
+**Done.**
+
+- **`A2`, the `.rat` half** — `assetlib/derived.py` (`fb379c6`). `iconvert` and
+  `hoiiotool` found by scanning Houdini installs newest-first, called as
+  subprocesses, so **no `hou` import** and the module lives in `assetlib` like
+  everything else. `derived_rel()` changes only the extension, so slot, LOD,
+  resolution and `<UDIM>` survive into the bake. UDIM is all-or-nothing —
+  half a set renders holes.
+- **The hook is one line** in `build.textures_for()`, the only place a texture
+  becomes a path. Two flags: `derived` = use a bake, `bake` = make a missing
+  one; off-and-off is exactly last week's behaviour. One checkbox in
+  `import_houdini.py`, because the decisions live in the library.
+- **`ui/bake.py`** + Library menu — pre-bake a shelf, off the GUI thread,
+  selection only.
+- **The freeze, and the fix** (`4234b2d` then `1d8c01e`). See *Decided*.
+- **`A4` recorded** (`0499293`) — USD variant sets from the bindings instead of
+  a cooked prim-`name` probe. Phase 3b.
+- **The box re-indexed**: `111 assets in 1.1s (0 failed)`, `/api/health` now
+  `assets=111 mounted=True`. Master and cache agree. Passwordless sudo for
+  `felix` turned out to be configured, so it ran over SSH with no password.
+- **`packs.json` rewritten.** `remote` and `houdini` added, `ui` cut from a
+  `ui/**` glob to a named list. Uncovered code **4 739 lines → 87**.
+- **Codemap**: 55 files, 15 232 lines, 76 types.
+
+**Decided.** Baking is **on demand, not at import**: measured 1.0 s per 2K map
+and 4.6 s per 8K, so all 111 would be ~900 conversions and roughly **+100 GB**
+on a 43.75 GB library, most of it for assets nobody renders. And the reason for
+any of it is not speed — Karma converts a `.jpg` itself and writes the result
+into `tex/`, which is where the 60 strays came from. Give it a `.rat` and there
+is nothing left to convert.
+
+The freeze is the entry worth reading twice. Baking behind a progress bar that
+called `QApplication.processEvents()` produced **an animated bar on a frozen
+Houdini** — `processEvents` pumps *Qt widget* events, so our own dialog
+repainted, while Houdini's viewport and cook run on *Houdini's* loop, which
+cannot run while a Python script is on the main thread. Pumping Qt does not hand
+control back; **only returning does**. So the build is now deferred:
+`hou.ui.addEventLoopCallback` (found in the shipped `hou.py`, not assumed)
+builds the nodes once the worker finishes. The contract change is real and is
+stated rather than hidden — a build that had to bake returns `None`, and
+`send()` says "baking… the nodes appear when it finishes" instead of counting
+zero.
+
+Rejected: binding the `.jpg` immediately, baking in the background and
+re-pointing the nodes. Never stalls, and changes paths under a scene that is
+already open — a surprise traded for a wait.
+
+**Open.**
+
+- **The deferred path has been confirmed working by Felix**, but only on the
+  route he used. Which of the two entry points — Python Panel or shelf button —
+  is not recorded, and they hold the main thread differently.
+- **`.tx` has a converter wired (`hoiiotool`) and no caller.** `.usda`
+  untouched. `A2` is a third done.
+- **`derived/` has no size budget.** A `.rat` is ~3× its source, and the
+  `_cache/` gap is the same shape. Neither is bounded.
+- **The 60 pre-existing strays in `tex/` are still there** (1.85 GB on the box,
+  25 `verify` warnings). Now worth cleaning, because with `A2` they stop coming
+  back — before it, deleting them was pointless.
+- **`smudgeslarge001` still needs its re-import** — the last two non-`.rat`
+  warnings.
+- **`packs.json` is committed but the packs are not** — `context/` is
+  gitignored on purpose. `ui` at 66k is the heaviest left and could split again
+  (Add/Edit are their own topic); the cut is not obvious enough to make yet.
+
+**Next.** Clean the 60 strays, now that `A2` stops them returning — locally and
+on the box, then re-index. It is the one item whose cost only goes up while the
+library grows.
+
+---
+
+## 2026-09-13 (later) — the push, and who is allowed to make it
 
 Third entry today. The one below is `B1`; this is the way back up to the box,
 and the gate on it.

@@ -11,8 +11,8 @@
   cooked probe — see Phase 3b
 
 **Filling the library**
-- `B1` bulk migration — **batch importer built 2026-09-12**, nothing imported
-  through it yet. Scope measured and much smaller than assumed; see Phase 4
+- `B1` bulk migration — **started 2026-09-13**, FabLibrary done: 36 assets,
+  75 → 111. Procedure in `docs/porting.md`; see Phase 4
 - `B2` zip auto-extraction on import
 - `B3` dedup in the UI — `index.find_by_hash()` is a stub; the hashes are
   already in every `asset.json`
@@ -32,14 +32,15 @@ be copied to a USB stick and still work.
 > **The target slice: drop a vendor zip in, and open the asset in Houdini from
 > a node that never had to guess what any file was.**
 
-Both halves now exist. What is missing is the middle: the library holds 58
-assets and the sources hold a few hundred. `B1` is the gap.
+Both halves now exist, and the middle has started closing: the library holds
+**111** assets as of 2026-09-13, up from 58, with the sources still holding a
+few hundred. `B1` is the remaining gap.
 
 ---
 
 ## Build order
 
-*Updated 2026-09-12.*
+*Updated 2026-09-13.*
 
 ### Phase 1 — Import, edit, browse — *done 2026-08-21*
 
@@ -60,10 +61,9 @@ ported from the old shelf tool, with roughly a thousand lines of filename
 guessing left behind because `asset.json` already answers it. Right-click an
 asset → *Import to Houdini*. Confirmed building nodes.
 
-Still open on it: no geometry format ranking (see *Open bugs*), `derived/`
-empty until `A2`'s uncommitted `derived.py` is finished and proven in Houdini,
-and only Karma is wired —
-Arnold and Redshift would need a second mapping table, which is config.
+Still open on it: no geometry format ranking (see *Open bugs*), and only Karma
+is wired — Arnold and Redshift would need a second mapping table, which is
+config. `derived/` stopped being empty on 2026-09-13; see Phase 3.
 
 ### Phase 2b — `C1` the cloud library — **done 2026-09-13**
 
@@ -101,18 +101,28 @@ the loop. Verified from the library side: 6 maps in 1.0 s, re-runs skip, zero
 new `verify` warnings.
 
 Baking runs **before the first node exists**, on a pool thread, with a small
-progress window (`assetlib_hou/bakewindow.py`) — the conversion is a subprocess
-and `derived.py` imports no `hou`, so Houdini's main thread does nothing but
-pump events and stays interactive. It blocks the *import*, not the
-*application*: the nodes appear when the bake finishes, and you can look around
-meanwhile. Nothing is shown when every bake is already current, which is every
-build after the first.
+progress window (`assetlib_hou/bakewindow.py`). The conversion is a subprocess
+and `derived.py` imports no `hou`, so it is safe off the main thread — and the
+build is **deferred**: `karma_component()` returns to Houdini, and the nodes are
+made from an idle callback once the worker finishes. Nothing is shown when every
+bake is already current, which is every build after the first.
 
-**Still open on it:** never run inside Houdini, so whether Karma is happy with
-these files is unproven — and the progress window in particular has only been
-exercised from the library side, never against a live Qt loop inside the host. `.tx` has a converter wired (`hoiiotool`) and no
-caller. `.usda` is untouched. `derived/` has no size budget — same shape as the
-`_cache/` gap, and a `.rat` is ~3× its source.
+**Confirmed working in Houdini by Felix on 2026-09-13**, after one wrong turn
+worth remembering: the first version baked behind a progress bar that pumped Qt
+events, which animated the bar and left Houdini frozen — Qt's events are not
+Houdini's, and its loop cannot run while a script is on the main thread. The
+build is now deferred through `hou.ui.addEventLoopCallback` (`1d8c01e`), so a
+build that has to bake returns no nodes and makes them from the idle callback.
+
+**Still open on it:** `.tx` has a converter wired (`hoiiotool`) and **no
+caller**; `.usda` is untouched — `A2` is a third done. `derived/` has **no size
+budget**, same shape as the `_cache/` gap, and a `.rat` is ~3× its source. Which
+entry point Felix tested — Python Panel or shelf button — is not recorded, and
+the two hold the main thread differently.
+
+**Worth doing now and not before:** the 60 stray `.rat` in `tex/` (1.85 GB, 25
+`verify` warnings) can finally be deleted, because `A2` stops them coming back.
+Deleting them before this landed would have been pointless.
 
 ### Phase 3b — `A4` variant sets from the bindings — *not started*
 

@@ -2,13 +2,14 @@
   "_note": [
     "Context packs for tools/pack.py. Keys starting with '_' are comments.",
     "",
-    "This project is ~5 000 lines, which fits in one window -- so 'all' is",
-    "genuinely usable here, unlike on a large C++ tree. The topic packs still",
-    "earn their place: a session about the import pipeline does not need the",
-    "Qt code, and one about the window does not need the hashing.",
-    "",
     "A pack must be self-sufficient: the topic's code, what it imports, and",
-    "the docs that argue for it. 'brief' is mandatory and attached first."
+    "the docs that argue for it. 'brief' is mandatory and attached first.",
+    "",
+    "Rewritten 2026-09-13. The set had been cut for a ~5 000 line project and",
+    "described it as of 2026-09-12; by then 4 739 lines - the whole cloud",
+    "library, the porting CLI, derived formats, the push, and ALL of",
+    "houdini/ - sat in no named pack at all. 'ui' had meanwhile grown to 79k",
+    "on a 'ui/**' glob covering two subjects that never come up together."
   ],
 
   "brief": {
@@ -29,11 +30,14 @@
 
   "ingest": {
     "description": "The import pipeline: what is guessed, where it lands, what is written.",
+    "_note": "port.py is here, not in its own pack: it is a thin caller of analyse+commit, and a question about bulk importing is a question about this pipeline. docs/porting.md is the procedure that goes with it.",
     "include": [
       "assetlib/analyse.py", "assetlib/commit.py", "assetlib/slots.py",
       "assetlib/naming.py", "assetlib/model.py", "assetlib/config.py",
+      "port.py",
       "config/types.json", "config/texture_slots.json", "config/library.json",
-      "docs/architecture.md", "docs/gotchas.md"
+      "config/categories.json",
+      "docs/architecture.md", "docs/gotchas.md", "docs/porting.md"
     ]
   },
 
@@ -41,7 +45,8 @@
     "description": "asset.json, the index, hashing and verification -- the 'disk is truth' half.",
     "include": [
       "assetlib/model.py", "assetlib/index.py", "assetlib/hashing.py",
-      "assetlib/verify.py", "assetlib/edit.py", "assetlib/config.py",
+      "assetlib/verify.py", "assetlib/edit.py", "assetlib/upgrade.py",
+      "assetlib/config.py",
       "config/library.json",
       "docs/architecture.md", "docs/gotchas.md"
     ]
@@ -49,15 +54,50 @@
 
   "ui": {
     "description": "The windows: browser, Add, Edit, Contents, and the threading rules around them.",
+    "_note": "Listed file by file rather than 'ui/**'. The glob quietly swallowed the server half as it was written and took the pack to 79k; naming them means a new window has to be put somewhere on purpose.",
     "include": [
-      "ui/**", "assetlib/model.py", "assetlib/index.py", "assetlib/analyse.py",
+      "ui/app.py", "ui/add_asset.py", "ui/batch_add.py", "ui/edit_asset.py",
+      "ui/asset_view.py", "ui/gridmodel.py", "ui/thumbcache.py",
+      "ui/writepool.py", "ui/theme.py", "ui/import_houdini.py", "ui/bake.py",
+      "assetlib/model.py", "assetlib/index.py", "assetlib/analyse.py",
       "assetlib/thumbnail.py",
       "docs/architecture.md", "docs/gotchas.md"
     ]
   },
 
+  "remote": {
+    "description": "The cloud library: catalogue, thumbnails, downloads, and the push back to the master.",
+    "_note": "Includes server/client-contract.md deliberately - it is the WHY for every decision in these files, and a pack that forces you to open the contract separately is cut wrong. server/api.py is the other half of the same conversation and is small.",
+    "include": [
+      "assetlib/remote.py", "assetlib/catalog.py", "assetlib/materialise.py",
+      "assetlib/sync.py", "assetlib/deploy.py", "assetlib/shortcut.py",
+      "assetlib/index.py", "assetlib/config.py",
+      "ui/remote_libraries.py", "ui/import_remote.py", "ui/sync_server.py",
+      "ui/first_run.py", "ui/new_library.py", "ui/netpool.py",
+      "server/client-contract.md", "server/api.py", "server/paths.py",
+      "docs/architecture.md", "docs/gotchas.md"
+    ]
+  },
+
+  "houdini": {
+    "description": "The adapter: Karma/MTLX/Solaris node building, the seam, and .rat generation.",
+    "_note": "houdini/ was in NO pack until 2026-09-13, which is 1 843 lines including the 1 324-line builder. import_houdini.py is in here as well as in 'ui' because the options are decided there and obeyed here - reading one without the other is how the two drift.",
+    "include": [
+      "houdini/python/assetlib_hou/build.py",
+      "houdini/python/assetlib_hou/bakewindow.py",
+      "houdini/python/assetlib_hou/launch.py",
+      "houdini/python/assetlib_hou/panel.py",
+      "houdini/python/assetlib_hou/seam.py",
+      "houdini/README.md",
+      "ui/import_houdini.py", "assetlib/derived.py",
+      "assetlib/model.py", "assetlib/config.py",
+      "config/texture_slots.json",
+      "docs/architecture.md", "docs/gotchas.md"
+    ]
+  },
+
   "all": {
-    "description": "Everything: assetlib, ui and config. Fits a window on this project.",
-    "include": ["assetlib/**", "ui/**", "config/**"]
+    "description": "Everything: assetlib, ui, houdini and config.",
+    "include": ["assetlib/**", "ui/**", "houdini/python/**", "config/**"]
   }
 }
