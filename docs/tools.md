@@ -126,6 +126,10 @@ You never write `src/` yourself.
   // your entry is imported.
   "pythonpath": ["Main_ui", "Layer_generator"],
 
+  // The interpreter to start, when the bundled runtime is not one that can run
+  // your tool. Omit it unless you need it — §4.5.
+  "python": "python",
+
   // Folders of HDAs. Recorded, and currently loaded by nothing — §4.4.
   "otls": []
 }
@@ -180,6 +184,12 @@ defines some functions and opens nothing. Standalone launches run the file
 through `runpy` as `__main__` and so work anyway; in-process launches do not.
 A launcher that execs them is the shape that works in both.
 
+**Do not have both.** A standalone launch runs your file as `__main__` *and
+then* calls the callable if the module defines one. A tool that opens its
+window in `__main__` and also exposes `show()` opens two windows, the second
+when the first is closed. Pick one: work in `__main__` and no callable, or a
+callable and nothing at module level.
+
 ### 4.2 `pythonpath`
 
 Only the folders whose modules are imported **by bare name**. Not every folder
@@ -188,6 +198,35 @@ you have.
 The folder your entry sits in is added automatically, so it does not need
 declaring. A folder on `sys.path` that nothing imports is a name collision
 waiting in a process that already has thousands of modules.
+
+### 4.5 `python` — when the bundled runtime is the wrong interpreter
+
+Standalone launches use `runtime\python.exe`, because it is the only
+interpreter this project can be sure of: the machine may have no system Python,
+which is the whole reason `runtime/` travels with the folder.
+
+**It ships PySide6 and numpy. It does not ship tkinter, scipy, or anything
+else.** A tkinter tool launched with it dies on `import tkinter` before its
+window exists — which reads as a broken asset and is not one.
+
+Name an interpreter and that is what gets started:
+
+```json
+"python": "python"
+```
+
+- **Prefer a bare name.** It is resolved on `PATH` at launch. Your asset syncs
+  to a shared master, so an absolute path that is right on your machine is
+  wrong on everyone else's. An absolute path works if you need it.
+- **A missing interpreter is reported as a missing interpreter**, naming what
+  was asked for, rather than as a tool that failed.
+- **Declaring it also means "not in this process".** A tool that names an
+  interpreter is a tool saying the current one is wrong, so it runs as a
+  subprocess even inside Houdini — which is also what you want for a tkinter
+  mainloop, since it would otherwise sit on the thread Houdini needs.
+
+Omit the field if your tool runs on PySide6 and numpy, or if it is a DCC tool:
+inside its host, the host's interpreter is the point.
 
 ### 4.3 `shelf[].icon` — stored, unread
 
@@ -310,6 +349,7 @@ After import, `library/script/<category>/<name>/asset.json`:
 | `shelf[]` | `fields.shelf`, entries prefixed `src/` | `launch.py`, and the menu |
 | `pythonpath[]` | `fields.pythonpath`, prefixed `src/` | `launch.py`, before the import |
 | `otls[]` | `fields.otls`, prefixed `src/` | nothing yet — §4.4; `verify` checks it exists |
+| `python` | `fields.python`, **not** prefixed — it is not a package path | `launch.py`, to pick the interpreter |
 
 `asset.json` is the truth from here on. If you edit the manifest inside `src/`
 afterwards, nothing re-reads it — re-import the asset instead.
@@ -330,6 +370,11 @@ In the library window:
   an **error**, reported at import and again at verify — that failure used to
   surface three steps later as *"…is not in the package"* at the moment of the
   first click.
+
+The confirmation box says which route will run: `import <module>` then the
+call, for in-process, or `run with <interpreter>, as __main__` for a
+subprocess. If that line does not match what your tool expects, stop there —
+it is the last point before anything of yours runs.
 
 If Launch does not appear at all, it is one of three things: the asset has no
 `shelf` entries; you are in the standalone window and the tool is tagged for a

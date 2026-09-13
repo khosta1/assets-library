@@ -500,7 +500,10 @@ class MainWindow(QMainWindow):
         items = launch.entries(asset)
         if not items:
             return
-        host = in_houdini()
+        # in_host(), not in_houdini(): a tool that names its own interpreter is
+        # a tool saying this process is the wrong one, and being inside Houdini
+        # does not change that.
+        host = launch.in_host(asset, in_houdini())
         if not host and not launch.launchable(self.cfg, asset):
             return
 
@@ -524,7 +527,7 @@ class MainWindow(QMainWindow):
         from assetlib import launch
 
         try:
-            what = launch.describe(asset, path, item)
+            what = launch.describe(asset, path, item, host)
         except Exception as exc:                        # noqa: BLE001
             QMessageBox.critical(self, "Cannot launch", str(exc))
             return
@@ -821,7 +824,7 @@ class MainWindow(QMainWindow):
             return False
 
         items = launch.entries(asset)
-        host = in_houdini()
+        host = launch.in_host(asset, in_houdini())
         if not items or (not host and not launch.launchable(self.cfg, asset)):
             return False
 

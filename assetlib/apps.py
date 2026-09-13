@@ -242,6 +242,11 @@ def from_manifest(data: dict, base: Path) -> dict:
     out = {"shelf": shelf,
            "otls": [under(p) for p in (data.get("otls") or [])],
            "pythonpath": [under(p) for p in (data.get("pythonpath") or [])]}
+    # NOT a package path, so it does not go through under(): it names an
+    # interpreter, which lives outside the asset by definition.
+    python = str(data.get("python") or "").strip()
+    if python:
+        out["python"] = python
     app = (data.get("app") or "").strip().lower()
     if app:
         out["tags"] = [tag(app)]

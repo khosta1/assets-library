@@ -992,6 +992,12 @@ def _record_tool(plan: ImportPlan, files, cfg) -> None:
         plan.fields["otls"] = [f"{BLOB_DIR}/{p}" for p in found.get("otls") or []]
         plan.fields["pythonpath"] = [f"{BLOB_DIR}/{p}"
                                      for p in found.get("pythonpath") or []]
+        # No src/ hop: every other path here is inside the package and this one
+        # is not - it is the interpreter to start, which the bundled runtime
+        # cannot always be. A tkinter tool was the case that found it: the
+        # runtime ships PySide6 and no tcl/tk at all.
+        if found.get("python"):
+            plan.fields["python"] = found["python"]
         plan.fields["app_tags"] = found.get("tags") or apps.detect(files, cfg, plan.source)
         plan.warnings.append(
             f"{apps.MANIFEST} found - entries and paths come from it, not from "

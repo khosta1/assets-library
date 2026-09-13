@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -49,6 +50,50 @@ class LaunchError(RuntimeError):
 def entries(asset) -> list:
     """What this asset offers to launch. Empty for anything that is not a tool."""
     return list(asset.fields.get("shelf") or [])
+
+
+def interpreter(asset) -> str:
+    """The interpreter this tool asked for, or "" for the bundled runtime."""
+    return str(asset.fields.get("python") or "").strip()
+
+
+def in_host(asset, host: bool) -> bool:
+    """Whether this launch should run in THIS process.
+
+    The host process, unless the tool asked for an interpreter - which is a
+    tool saying "not the one you are". A tkinter tool is the plain case twice
+    over: the bundled runtime has no tcl/tk at all, and running a tkinter
+    mainloop inside Houdini would sit on the thread Houdini needs.
+    """
+    return bool(host) and not interpreter(asset)
+
+
+def _python(asset, override: Path | None = None) -> Path:
+    """Which interpreter to start, and a legible error when it is not there.
+
+    A BARE NAME is looked up on PATH rather than kept as a path, because an
+    asset syncs to a shared master: an absolute path that is right on this
+    machine is wrong on every other one. `"python"` travels; a path out of
+    AppData does not.
+    """
+    if override:
+        return Path(override)
+    name = interpreter(asset)
+    if not name:
+        return Path(sys.executable)
+    if "/" in name or "\\" in name:
+        path = Path(name)
+        if path.is_file():
+            return path
+        raise LaunchError(f"this tool asks for the interpreter {name} and it "
+                          "is not there - install it, or change \"python\" in "
+                          "the asset to a name on PATH")
+    found = shutil.which(name)
+    if not found:
+        raise LaunchError(f"this tool asks for {name!r} and there is no {name} "
+                          "on PATH - the bundled runtime cannot run it, which "
+                          "is why the tool named one")
+    return Path(found)
 
 
 def search_paths(asset, asset_dir: Path) -> list:
@@ -73,7 +118,7 @@ def search_paths(asset, asset_dir: Path) -> list:
     return out
 
 
-def describe(asset, asset_dir: Path, item: dict) -> str:
+def describe(asset, asset_dir: Path, item: dict, host: bool = True) -> str:
     """Exactly what will run, for showing BEFORE it runs.
 
     Not decoration. This module executes code out of a package that may have
@@ -84,8 +129,17 @@ def describe(asset, asset_dir: Path, item: dict) -> str:
     entry = (item.get("entry") or "").strip()
     call = (item.get("callable") or "show").strip()
     module = Path(entry).stem
-    return (f"{Path(asset_dir) / entry}\n\n"
-            f"import {module}\n{module}.{call}()")
+    path = Path(asset_dir) / entry
+
+    # The two routes do genuinely different things, and the confirmation is
+    # worthless if it describes the wrong one. In-process imports the module
+    # and calls one function; a subprocess runs the whole FILE as __main__,
+    # which for most of these tools is where the work actually is.
+    if host:
+        return f"{path}\n\nimport {module}\n{module}.{call}()"
+    named = interpreter(asset) or Path(sys.executable).name
+    return (f"{path}\n\nrun with {named}, as __main__\n"
+            f"then {call}(), if the module defines one")
 
 
 def _checked(asset, asset_dir: Path, item: dict) -> tuple:
