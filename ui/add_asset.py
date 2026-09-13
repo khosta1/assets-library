@@ -16,6 +16,7 @@ Nothing is written until Add is pressed; commit.py remains the only writer.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from PySide6.QtCore import (QAbstractTableModel, QModelIndex, QObject, QRunnable,
@@ -684,11 +685,34 @@ class AddAssetDialog(QDialog):
     def _plan_source(self, files: list) -> Path:
         """The base that in-package relative paths are resolved against.
 
-        Adding an asset there is no package yet, so any folder will do. The
-        editor overrides this with the package itself, which is what lets a
-        file already sitting in extra/ round-trip to extra/.
+        The COMMON ANCESTOR of everything dropped, not `files[0].parent`. That
+        was true while every asset was a flat folder of textures - all files
+        share one parent, so the first one's parent is the root - and wrong for
+        a tree: the first file of the Manager_tool suite lives in
+        `suite/assets_manager/`, so every file outside that folder failed
+        `relative_to()` and fell back to its bare name.
+
+        The visible result was a flattened `src/`, and then a CLASH: six
+        `tool_config.json` files, one per tool folder, all landing on
+        `src/tool_config.json`. `conflicts()` disabled Add, correctly - the
+        destinations really did collide - but the collision was made three steps
+        earlier, here.
+
+        Falls back when the ancestor is useless: files from two drives have
+        none, and one at a filesystem root would make every destination carry
+        the whole path from there. The editor overrides this method entirely
+        with the package itself, which is what lets a file already in extra/
+        round-trip to extra/.
         """
-        return files[0].parent
+        try:
+            common = Path(os.path.commonpath([str(f) for f in files]))
+        except ValueError:
+            return files[0].parent          # different drives
+        if not common.is_dir():
+            common = common.parent          # a single file: its folder
+        if common == common.parent or not common.name:
+            return files[0].parent          # a drive or filesystem root
+        return common
 
     def _replan(self, *_) -> None:
         """Rebuild the plan, then re-apply the user's overrides on top.
