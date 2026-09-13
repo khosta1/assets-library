@@ -304,8 +304,13 @@ def commit(plan: ImportPlan, cfg, tags=None, dry_run: bool = False,
     asset_dir.mkdir()
 
     asset = Asset.new(name=name, type_id=plan.type_id, category=plan.category)
-    asset.tags = sorted(set(tags or []))
     asset.fields = dict(plan.fields)
+    # The apps a tool targets are TAGS, not a field: they have to be searchable
+    # with the tag: filter the index already understands, and an asset can
+    # target two. Merged with whatever was typed rather than replacing it, and
+    # popped from fields so the same fact is not stored in two places where the
+    # two could disagree.
+    asset.tags = sorted(set(tags or []) | set(asset.fields.pop("app_tags", [])))
     asset.origin = {"source": str(plan.source), "source_name": plan.source.name}
 
     # Never consume something already inside the library: that would be moving
