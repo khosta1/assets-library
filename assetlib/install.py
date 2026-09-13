@@ -121,7 +121,7 @@ def shelf_xml(asset_name: str, shelf: list) -> str:
             "<shelfDocument>\n" + "\n".join(tools) + "\n</shelfDocument>\n")
 
 
-def package_json(asset_dir: Path, shelf: list) -> dict:
+def package_json(asset_dir: Path, shelf: list, otls: list | None = None) -> dict:
     """The package Houdini reads. Absolute, because it is written per machine.
 
     Every directory the tool might import from goes on PYTHONPATH, not just the
@@ -129,6 +129,14 @@ def package_json(asset_dir: Path, shelf: list) -> dict:
     and import each other by bare name, which is what the source's
     `sys.path.insert` lines were compensating for. Doing it here is what lets
     those lines be deleted rather than rewritten.
+
+    `otls` gets HOUDINI_OTLSCAN_PATH rather than having the .hda files moved.
+    Houdini only auto-scans `<package>/otls`, so the tempting move is to lift
+    them out of the tree at import - and that breaks the one promise folder_blob
+    makes, that the tree arrives exactly as it was. Pointing at where they
+    already are costs one env line and generalises to a tool with three HDA
+    folders. `&` keeps Houdini's own libraries on the path; without it the
+    package would replace them and every native asset would vanish.
     """
     root = str(asset_dir).replace("\\", "/")
     env = [{"PYTHONPATH": {"value": root, "method": "append"}}]
@@ -140,6 +148,14 @@ def package_json(asset_dir: Path, shelf: list) -> dict:
         pair = {"PYTHONPATH": {"value": folder, "method": "append"}}
         if pair not in env:
             env.append(pair)
+
+    for rel in (otls or []):
+        rel = str(rel).strip().replace("\\", "/").strip("/")
+        if not rel:
+            continue
+        env.append({"HOUDINI_OTLSCAN_PATH":
+                    {"value": f"{root}/{rel};&", "method": "append"}})
+
     return {"enable": True, "env": env, "path": root}
 
 
@@ -160,6 +176,7 @@ def install(cfg, asset, asset_dir: Path, pref_dir: Path,
 
     asset_dir = Path(asset_dir)
     shelf = list(asset.fields.get("shelf") or [])
+    otls = list(asset.fields.get("otls") or [])
 
     written = []
     xml = shelf_xml(asset.name, shelf)
