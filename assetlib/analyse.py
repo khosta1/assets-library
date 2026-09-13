@@ -932,6 +932,39 @@ def _plan_blob(plan: ImportPlan, files, cfg) -> None:
     _record_tool(plan, files, cfg)
 
 
+def _declared_icon(plan: ImportPlan, manifest: dict) -> None:
+    """`icon` in the manifest names the image the thumbnail is rendered FROM.
+
+    Declared beats scanned, the same way the shelf entries do. Scanning already
+    finds `manager_tool.png` beside a manifest in an asset called
+    `manager_tool` - by the rule that a file named after the asset is its
+    preview - but only while those two names happen to agree. One rename and it
+    stops, silently, and the asset loses its picture with nothing said.
+
+    A SOURCE, never the thumbnail: `commit` renders `preview/thumb.jpg` at 512px
+    from whatever this points at, so the file can be any size and any format
+    Pillow reads. It also still travels into `src/` like every other file in the
+    tree - the icon is copied, not consumed.
+
+    Optional in both directions. A missing field is silence; a field naming a
+    file that is not there is a WARNING and nothing more. An asset does not fail
+    to import over a picture, and the usual cause - a rename on one side only -
+    is worth a word rather than a refusal.
+    """
+    from . import apps
+
+    rel = (manifest.get("icon") or "").strip()
+    if not rel:
+        return
+    path = Path(manifest.get("_root") or plan.source) / rel
+    if path.is_file():
+        plan.preview_src = path
+        return
+    plan.warnings.append(
+        f"{apps.MANIFEST} names an icon that is not there: {rel} - the asset "
+        "will use the type icon until the file is added")
+
+
 def _record_tool(plan: ImportPlan, files, cfg) -> None:
     """What this blob needs in order to be installed, if it is a tool.
 
@@ -950,6 +983,7 @@ def _record_tool(plan: ImportPlan, files, cfg) -> None:
     manifest = apps.read_manifest(files, plan.source)
     if manifest is not None:
         found = apps.from_manifest(manifest, plan.source)
+        _declared_icon(plan, manifest)
         # Every path the manifest gave was relative to itself and is now
         # relative to the SOURCE; the tree lands under src/, so one more hop.
         for item in found.get("shelf") or []:
