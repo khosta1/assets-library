@@ -23,6 +23,9 @@
 
 **Housekeeping**
 - `C1` verify the three unverified type signatures (see below)
+- `C4` updating the app itself — **done 2026-10-05**, `assetlib/update.py` +
+  Library ▸ *Check for updates…*. GitHub masters the code, the box masters the
+  assets. Never run; the network path is unexercised
 - `C2` git — **done 2026-09-11**
 
 ---
@@ -277,6 +280,22 @@ thing in front rather than the thing being deferred.
 ---
 
 ## Open bugs
+
+**Open from 2026-10-05** (the updater):
+
+- **Never run.** `assetlib/update.py` compiles and imports; no call has been
+  made to GitHub from it, so the API shape, the User-Agent header and the
+  codeload URL are correct by reading only.
+- **An update never deletes.** Extracting over the tree adds and replaces; a
+  file removed upstream stays on disk forever. Rare enough to be worth less
+  than a delete pass with a bug in it, but it means a retired module lingers
+  and could still be imported.
+- **`runtime/` cannot be updated this way** — gitignored, ~320 MB, so a
+  machine whose runtime is wrong is not fixable from the button. First copies
+  still go by disk or `deploy.py`.
+- **No rollback.** The previous version is recoverable from GitHub, not from
+  this disk; nothing is backed up before the copy, on the argument that the
+  install *is* a checkout of what is being written.
 
 **Open from 2026-09-13** (the launch work):
 

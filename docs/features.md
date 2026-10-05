@@ -61,6 +61,16 @@ committed.
   Output goes to a log, read back 1.5 s later from the event loop; a missing
   module plus the bundled interpreter adds what the runtime actually ships.
 
+- **Updating the app from GitHub** — `assetlib/update.py` + `ui/update_app.py`,
+  Library ▸ *Check for updates…* (2026-10-05). Fetches the published archive
+  over HTTPS with `urllib` + `zipfile`, **not** `git pull`: requiring git would
+  break the one case portability exists for, a copy carried to a machine that
+  has nothing. The archive **is** the tracked tree, so `library/`, `_cache/`,
+  `.assetlib/` and `runtime/` cannot be touched — that is a property of the
+  download rather than a filter kept in step with `.gitignore`. A config file
+  the person has edited is kept and the new one lands beside it as `.new`.
+  Identity is the **commit sha** in `.assetlib/update.json`, because
+  `__version__` has read `0.1.0` for 53 commits. *Never run.*
 - **Remote catalogue** — `assetlib/remote.py` + `catalog.py`. Library ▸ *Remote
   libraries…* declares a server; **Shift+F5** syncs `/api/catalog` into
   `.assetlib/remote/<host>.db`, ETag-diffed. Search runs local ∪ remote

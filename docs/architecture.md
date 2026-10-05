@@ -304,6 +304,13 @@ Added **2026-09-13**.
 > **The box is the master; this folder is a client. What crosses between them
 > is an asset identified by its uuid, never a path.**
 
+**There are two masters, and they are not the same thing** (added 2026-10-05).
+The box masters **assets**; GitHub masters **code**. Never the reverse — the box
+has no git, and GitHub must never see 44 GB. `assetlib/update.py` is the second
+arrow, and it carries no asset: it fetches the published archive, which is the
+tracked tree, so it *cannot* reach `library/`, `_cache/` or `runtime/` even by
+mistake. A copy that has fallen behind in one sense is untouched in the other.
+
 Three separate crossings, and they do not share a transport because they do not
 share a shape:
 

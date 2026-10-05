@@ -241,6 +241,12 @@ class MainWindow(QMainWindow):
         push.setToolTip("Over SMB on the LAN: what is new, changed or moved here")
         push.triggered.connect(self._push_to_server)
         menu.addAction(push)
+        menu.addSeparator()
+        upgrade_app = QAction("Check for updates…", self)
+        upgrade_app.setToolTip("The APP, from GitHub. Assets come from the "
+                               "server; these are two different masters.")
+        upgrade_app.triggered.connect(self._check_for_updates)
+        menu.addAction(upgrade_app)
 
         # Launched subprocesses, held so Popen is not collected while the tool
         # is still starting. Dropped once each one is known to have survived.
@@ -585,6 +591,18 @@ class MainWindow(QMainWindow):
                 self._launched.remove(started)
 
         QTimer.singleShot(1500, verdict)
+
+    def _check_for_updates(self) -> None:
+        """Library ▸ Check for updates. The APP, never the assets.
+
+        Two masters, and conflating them is the mistake this tooltip exists to
+        prevent: the box owns the assets and GitHub owns the code. Lazily
+        imported like every other dialog, so a window that is never opened
+        costs nothing at startup.
+        """
+        from .update_app import UpdateDialog
+
+        UpdateDialog(self.cfg, self).exec()
 
     def _bake_selected(self) -> None:
         """Pre-bake .rat for the selected assets. Lazily imported, like the rest.
