@@ -148,6 +148,25 @@ OpenEXR 3.4.14, xxhash 4.0.1.
   once and settled.
 - **Check the change against the invariants** in `docs/architecture.md` before
   presenting it as finished.
+- **Publishing is a second step, and `main` is now production.** `git commit`
+  changes nothing for anyone else; **`git push origin main`** is what makes an
+  update exist. `assetlib/update.py` fetches the HEAD of `main`, so every copy
+  that clicks Library ▸ *Check for updates…* installs whatever is sitting
+  there. Four consequences, in the order they bite:
+  - **Push what has been RUN, not what compiles.** `compileall` is the cheapest
+    verifier, never a test, and the standard here is that Felix runs the app and
+    observes it. An unobserved commit on `main` is unobserved code on every
+    copy. Commit freely; push once it has been seen to work.
+  - **The repository is public.** A push publishes to everyone, not only to the
+    other copies — `docs/machine.md` and `server/` carry the box's addresses.
+    The token is in no tracked file and must stay that way.
+  - **`server/` does not travel this way.** The box is updated by `scp` into
+    `/opt/assetlib` (`server/README.md`), so GitHub is not its deployment
+    channel. Change `api.py`, `paths.py` or a unit file and pushing is half the
+    job; the other half is on the box.
+  - **`runtime/` is never published** — gitignored, ~320 MB. A change that needs
+    a new dependency cannot ship as an update at all, and a copy that needs one
+    has to be replaced by disk or by *Create a new library…*.
 - **Comments argue.** They say why a decision was taken and what failed before.
   Those are never compressed.
 - **Caveman for WHAT, prose for WHY.** A comment that only describes drops
