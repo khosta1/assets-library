@@ -148,22 +148,29 @@ OpenEXR 3.4.14, xxhash 4.0.1.
   once and settled.
 - **Check the change against the invariants** in `docs/architecture.md` before
   presenting it as finished.
-- **Publishing is a second step, and `main` is now production.** `git commit`
-  changes nothing for anyone else; **`git push origin main`** is what makes an
-  update exist. `assetlib/update.py` fetches the HEAD of `main`, so every copy
-  that clicks Library ▸ *Check for updates…* installs whatever is sitting
-  there. Four consequences, in the order they bite:
-  - **Push what has been RUN, not what compiles.** `compileall` is the cheapest
-    verifier, never a test, and the standard here is that Felix runs the app and
-    observes it. An unobserved commit on `main` is unobserved code on every
-    copy. Commit freely; push once it has been seen to work.
-  - **The repository is public.** A push publishes to everyone, not only to the
-    other copies — `docs/machine.md` and `server/` carry the box's addresses.
-    The token is in no tracked file and must stay that way.
-  - **`server/` does not travel this way.** The box is updated by `scp` into
-    `/opt/assetlib` (`server/README.md`), so GitHub is not its deployment
-    channel. Change `api.py`, `paths.py` or a unit file and pushing is half the
-    job; the other half is on the box.
+- **Publishing is a deliberate act, not a side effect of committing.** Commit
+  freely and locally — `main` is what every copy INSTALLS, because
+  `assetlib/update.py` fetches its HEAD and Library ▸ *Check for updates…*
+  takes whatever is sitting there. So "is this ready for everyone" gets asked
+  once, at a known moment, instead of forty times by reflex and therefore never.
+  - **The moment is a push to the server, not a commit.** When the library is
+    pushed to the box (Library ▸ *Push this library to a server…*), publish the
+    code in the same pass: `git push origin main`. The two halves speak one
+    contract (`server/client-contract.md`), so tying them together is what stops
+    a client being published for a box that is not ready for it — the failure
+    nobody sees until somebody else's copy updates. Between pushes, commits pile
+    up locally and that is correct.
+  - **Push what has been RUN.** `compileall` is the cheapest verifier and never
+    a test; the standard here is that Felix runs the app and observes it. An
+    unobserved commit on `main` is unobserved code on every copy.
+  - **ASK before updating the box's own copy.** `/opt/assetlib` is a running
+    service with 1.7 TB behind it, updated by `scp` and a restart
+    (`server/README.md`) and never by GitHub. It is not touched unless it was
+    asked for by name: a bad deploy takes the API down for every client at once,
+    and every download in flight with it.
+  - **The repository is public.** A push reaches everyone, not only the other
+    copies — `docs/machine.md` and `server/` carry the box's addresses. The
+    token is in no tracked file and must stay that way.
   - **`runtime/` is never published** — gitignored, ~320 MB. A change that needs
     a new dependency cannot ship as an update at all, and a copy that needs one
     has to be replaced by disk or by *Create a new library…*.
