@@ -1,4 +1,4 @@
-# The three hooks
+# The three hook points
 
 `settings.json` is strict JSON and cannot carry comments, so the reasoning
 lives here. This file is the owner of it; do not restate it elsewhere.
@@ -53,7 +53,38 @@ yourself at the first sign of a long session, not to make the hook cleverer.
 
 ---
 
-## Stop — catching drift at the only moment it is cheap
+## Stop — two things that are only cheap to catch now
+
+Two commands, in the order of what they cost to miss. The unpublished-commits
+check runs first because its omission reaches other people.
+
+### Unpublished commits
+
+Added **2026-10-09**, the day `main` stopped being history and became the
+product. `assetlib/update.py` fetches the HEAD of `origin/main`, so what is on
+GitHub is what every copy installs when someone clicks Library ▸ *Check for
+updates…*. A commit that has not been pushed has reached nobody, and nothing
+anywhere said so.
+
+It counts `origin/main..HEAD`, names up to five of them, and points at the rule
+in `CLAUDE.md`. Three deliberate choices:
+
+- **It does not fetch.** A network call on every session end, to a box that may
+  be asleep, to answer a question the local ref already answers well enough:
+  *have I committed things I have not pushed.* A stale `origin/main` can only
+  make it over-report, which is the safe direction.
+- **It does not push.** Publishing is a decision with a named moment — the push
+  to the server — and a hook that published on its own would be making that
+  decision forty times a day, silently, which is exactly what the rule in
+  `CLAUDE.md` exists to prevent.
+- **It counts from HEAD, not from `main`.** On a feature branch the question is
+  the same one: what have I made that nobody else has.
+
+`exit 0` at the end, for the reason `stale.py` had to learn: the harness drops
+a failing hook's stdout, so a check that reports by exiting non-zero reports
+nothing at all.
+
+### Documentation drift
 
 When the session ends: if the working tree has changes **outside** `docs/`,
 `ROADMAP.md` and `CLAUDE.md`, and none inside them, say so, and name where the

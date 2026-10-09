@@ -49,6 +49,7 @@
     "Stop": [
       {
         "hooks": [
+          { "type": "command", "command": "powershell -NoProfile -Command \"if (git rev-parse --verify --quiet origin/main) { $n = [int](git rev-list --count origin/main..HEAD); if ($n -gt 0) { Write-Output ('NOT PUBLISHED -- ' + $n + ' commit(s) that origin/main does not have. Every copy installs the HEAD of origin/main, so none of this has reached anyone yet.'); git log --oneline -5 origin/main..HEAD | ForEach-Object { Write-Output ('   ' + $_) }; Write-Output 'CLAUDE.md: publish at the push to the server, not on every commit.' } }; exit 0\"" },
           { "type": "command", "command": "powershell -NoProfile -Command \"$c = git status --short; $d = $c -match '^.. (docs/|ROADMAP\\.md|CLAUDE\\.md)'; $o = $c -notmatch '^.. (docs/|ROADMAP\\.md|CLAUDE\\.md)'; if ($o -and -not $d) { Write-Output 'Code changed this session, no doc did. Check the table in .claude/skills/doc-ritual/SKILL.md: decision -> decisions.md, hour lost -> gotchas.md, switch flipped -> features.md, code removed -> History/.' }\"" }
         ]
       }
