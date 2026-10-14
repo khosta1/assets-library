@@ -27,11 +27,19 @@ EnvironmentFile=/etc/assetlib/api.env
 # default is 30 seconds. A 1 GB asset over a relayed ZeroTier link at ~1 MB/s
 # is about 17 minutes, so the default would kill every real import. Not 0 -
 # a genuinely hung worker should still be reaped.
+# --no-control-socket: gunicorn 26 opens a control socket under $HOME, and
+# ProtectHome=read-only below means it cannot. It logged
+# "[ERROR] Control server error: [Errno 30] Read-only file system" at every
+# single start since 2026-10-11. Nothing here uses that interface, so it is
+# switched off rather than given somewhere to live - an ERROR at every boot
+# that is known-harmless is worse than useless, because it teaches whoever
+# reads these logs that errors here are normal.
 ExecStart=/opt/assetlib/venv/bin/gunicorn \
     --bind 0.0.0.0:8083 \
     --pythonpath /opt/assetlib \
     --worker-class gthread --workers 2 --threads 8 \
     --timeout 3600 \
+    --no-control-socket \
     --access-logfile - \
     server.api:app
 
