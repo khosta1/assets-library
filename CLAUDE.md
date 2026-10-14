@@ -106,6 +106,7 @@ tools\stale.bat              docs older than the code they cover
 tools\recall.bat <query>     search past sessions
 tools\shot.bat "Asset"       screenshot the window -> .claude\shots\
 tools\budget.bat             what each doc costs
+tools\release.bat            distributable zip (app + runtime) -> dist\
 ```
 
 Everything they write is generated and gitignored. The scripts are a copy of

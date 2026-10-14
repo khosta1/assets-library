@@ -219,7 +219,23 @@ accepts. No client, old or new, notices.
 
 ## 4. Each reader
 
-One field, in Library ▸ *Remote libraries…*:
+**First they need the app**, and this is the step nobody had written down.
+GitHub alone cannot provide it: `runtime/` is gitignored — correctly, it is
+293 MB of bundled Python — so a clone gets the code and nothing that runs it.
+
+`tools/release.bat` builds the archive (**2026-10-14**). It calls
+`deploy.plan()` rather than keeping its own list, so what travels is decided in
+one place and cannot drift from *Create a new library…*; and it **refuses to
+write** an archive containing anything under `.assetlib/`, `library/`, `_cache/`
+or `.git/`, checked against the assembled file list rather than trusted from
+upstream. A copy onto a disk is recoverable from a mistake; a public download
+page is not — caches, forks and mirrors outlive any deletion, and `.assetlib/`
+holds the server token.
+
+Measured 2026-10-14: **4 751 files, 293.5 MB**, essentially all of it
+`runtime/`. Attach the zip to a GitHub release. The reader unzips one folder
+and runs `Asset Library.vbs` — **no installer, no pip, no system Python, no
+admin rights.** Then:
 
 ```
 url     https://<domain>          ← the only thing that differs from a mesh member
