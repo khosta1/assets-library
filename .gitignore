@@ -45,3 +45,26 @@ __pycache__/
 # Bulk port: generated plan and run log.
 context/port-plan.json
 port.log
+
+# --- NOT published -----------------------------------------------------
+# This repository is public, and these are the project's own reasoning rather
+# than the application: design arguments, the session journal, machine-specific
+# deployment detail, and the agent configuration. Felix's decision, 2026-10-14,
+# after the v2026.10.14 release made the repository findable.
+#
+# They stay ON DISK and are excluded from a shipped copy anyway - deploy.py has
+# always had docs/ and .claude/ in DEV_DIRS and SKIP_DIRS, so no reader ever
+# received them. What changes is only that they are no longer in git.
+#
+# TWO THINGS TO KNOW. The copies already pushed remain in the HISTORY and are
+# recoverable from any clone - nothing is lost by this, and nothing is
+# un-published by it either. And from here on doc changes are NOT versioned
+# anywhere: the journal, the gotchas and the decisions are the project's memory,
+# and they now live on one disk with no backup, which is the exact situation git
+# was adopted to end on 2026-09-11. A private repository is the fix and this is
+# not it.
+docs/
+.claude/
+CLAUDE.md
+ROADMAP.md
+
