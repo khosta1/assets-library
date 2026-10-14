@@ -54,6 +54,39 @@ else.
 
 ---
 
+## What the box side found, 2026-10-14
+
+Reported by the `server-a9` session, which can see the box. Three of these
+change the plan and two block it outright. **Facts, not decisions.**
+
+- **A public HTTPS ingress ALREADY EXISTS.** The box runs Tailscale with a live
+  Funnel — `https://portail.tail8af70e.ts.net`, real certificate, no domain, no
+  NAT rule, no renewal to manage. Adding `/assets → 127.0.0.1:8083` is **one
+  `tailscale serve` command.** So this was never "build public HTTPS"; it is
+  *extend the ingress that exists, or build a second one*.
+- **Port 443 is already bound**, by `tailscaled`, on its own addresses
+  (`100.95.101.1:443` and its IPv6). Caddy binding `0.0.0.0:443` collides and
+  fails `EADDRINUSE`. It must be given `bind 192.168.1.13` explicitly, which
+  coexists with Tailscale's per-address bind.
+- **The NAT rule probably points at the wrong machine.** The Livebox rule names
+  device `braucoly-1`, and **two devices on that LAN are called `braucoly`** —
+  the Rocky box (`192.168.1.13`, MAC `70:85:c2:46:aa:9f`) and Felix's Windows
+  PC. The collision is almost certainly why the Livebox minted a `-1`. **No
+  shell can resolve this**: the Livebox UI has to be opened and the MAC behind
+  `braucoly-1` read. `70:85:c2:46:aa:9f` is the box; anything else is not.
+- **CGNAT is confirmed absent** — `90.105.205.11`, not `100.64/10`. The server
+  panel's own gotcha 2 says the opposite, from a `tcpdump` taken before the
+  Livebox was swapped on 2026-09-12. **That gotcha is stale** and is the reason
+  ZeroTier and the Funnel exist at all.
+
+**And the thing that makes this a decision rather than a task:** the server
+repo holds an invariant — *nothing is exposed to the internet except through
+Tailscale* — which **a direct 443 forward breaks outright**. Everything below
+describes the direct route. It is not obviously the right one any more; see
+*Which ingress* at the end.
+
+---
+
 ## The shape
 
 ```
@@ -88,16 +121,22 @@ the re-index path. Neither has any business on the internet.
 ZeroTier members keep working unchanged through `10.209.73.177:8083`. Caddy
 reaches it on loopback.
 
-**firewalld.** 8083 is currently open in the `public` zone (`server/README.md`
-step 6). Close it there and open 443 instead — the ZeroTier interface
-`ztfl6jes34` is in the `trusted` zone whose target is `ACCEPT`, so mesh members
-are unaffected:
+**firewalld.** Open 443 in the `public` zone:
 
 ```bash
-sudo firewall-cmd --zone=public --remove-port=8083/tcp --permanent
 sudo firewall-cmd --zone=public --add-port=443/tcp --permanent
 sudo firewall-cmd --reload
 ```
+
+> **CORRECTION, 2026-10-14.** This file first also said to
+> `--remove-port=8083/tcp` from the `public` zone, on the reasoning that mesh
+> members sit on `ztfl6jes34` in `trusted` and would be unaffected. **That is
+> wrong and would have broken something.** The box side found it: Felix's PC at
+> `192.168.1.20` reaches the API *directly* at `192.168.1.13:8083` over the
+> LAN, which is the fast path and was opened deliberately. Closing 8083 forces
+> home traffic to hairpin through the public URL or crawl over ZeroTier. **If
+> it is ever closed, it is closed after something faster is proven, never
+> before.**
 
 **Caddy**, for TLS. The whole config:
 
@@ -229,3 +268,37 @@ neither touches the other.
   control at home.
 - **TLS-ALPN-01 on 443 alone is untried**, and so are Caddy's proxy timeouts
   against a 1 GB transfer.
+
+---
+
+## Which ingress — open, and Felix's call
+
+Two roads, and the measurement that would settle it has still not been taken.
+
+**Extend the Funnel.** One `tailscale serve` command. No domain, no NAT rule, no
+certificate lifecycle, no SELinux boolean, no second thing to maintain — and it
+keeps the server repo's invariant that nothing is exposed except through
+Tailscale. Readers still install nothing: a Funnel URL is an ordinary HTTPS
+address to whoever opens it.
+
+> Against it: Funnel **relays through Tailscale's infrastructure** and is not
+> meant for bulk transfer. For a catalogue and thumbnails it is ideal. For 1 GB
+> asset pulls it is the wrong pipe and arguably an abuse of a free service.
+
+**Direct 443 + Caddy** — everything described above. Full use of the fibre, no
+third party in the path. Against it: it breaks that invariant, needs the MAC
+resolved, needs `bind 192.168.1.13`, needs a hostname and a certificate
+lifecycle, and publishes the home address.
+
+**The split that is probably the real answer:** Funnel for the catalogue and
+thumbnails, direct for file bytes. Worth knowing that this needs **no client
+change** — `/api/file/...` can answer `302` to the direct host and `urllib`
+follows redirects by default, which is the same mechanism the object-storage
+idea would have used. One base URL in the client, two pipes behind it.
+
+**Nothing should be chosen before one large download is timed.** Over the
+Funnel and over the direct path. The figure every plan here has leaned on —
+*1–2 MB/s, a 1 GB asset is ~17 minutes* — measures **ZeroTier's relay** and
+nothing else. Two candidate pipes now exist and neither has been timed. If the
+Funnel is fast enough in practice, the direct route and its domain, certificate
+and broken invariant are all unnecessary.
