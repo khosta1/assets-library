@@ -270,9 +270,8 @@ neither touches the other.
 
 ## Open, and honest about it
 
-- **Throughput is unmeasured.** Time one large download over the new path
-  before concluding anything about object storage, CDNs or where the bytes
-  should live.
+- ~~**Throughput is unmeasured.**~~ **Measured 2026-10-14 — and it reverses the
+  bet.** See *Throughput* below.
 - **16 concurrent requests, total.** `--workers 2 --threads 8`. A hundred
   readers do not get a hundred downloads; they get a queue. This is a knob, not
   a wall, but it is set for 25 people.
@@ -318,3 +317,68 @@ Funnel and over the direct path. The figure every plan here has leaned on —
 nothing else. Two candidate pipes now exist and neither has been timed. If the
 Funnel is fast enough in practice, the direct route and its domain, certificate
 and broken invariant are all unnecessary.
+
+---
+
+## Throughput — measured 2026-10-14
+
+One real file, 168.9 MB, a 160 MB Range request of the same bytes down three
+paths, from the PC at `192.168.1.20`:
+
+| path | rate | 160 MB |
+|---|---|---|
+| LAN `192.168.1.13:8083` | **100.2 MB/s** | 1.67 s |
+| **Funnel** `portail…ts.net:10000` | **2.4 MB/s** | 69.94 s |
+| ZeroTier `10.209.73.177:8083` | **100.5 MB/s** | 1.67 s |
+
+Projected:
+
+| | 1 GB | 12.8 GB (`texturingxyzmale`, the largest) |
+|---|---|---|
+| LAN | 0.2 min | 2.2 min |
+| **Funnel** | **7.5 min** | **93.6 min** |
+
+**Carry this caveat with the 2.4 wherever it is quoted.** It is a **hairpin** —
+box → Felix's *upload* → Tailscale's ingress → Felix's *download* → PC — so it
+spends both legs of one connection where a genuine remote reader spends only the
+upload leg. The true one-way figure is somewhere between 2.4 and roughly double
+it. Still two orders of magnitude off the LAN, and still bounded by what
+Tailscale's relay allows rather than by the fibre. **The definitive number is
+still one large asset pulled on mobile data**, and it is worth taking precisely
+because 2.4 is close enough to the decision boundary that doubling it would
+change the answer.
+
+### Three things the numbers settle
+
+**The Funnel does NOT make the CDN argument moot.** Both this session and the
+box side predicted it would. At 2.4 MB/s it lands in the same class as the relay
+figure, not a different one. For the catalogue (21 KB gzipped) and thumbnails it
+is excellent. For a 1 GB asset it is seven and a half minutes — usable, not
+pleasant.
+
+**ZeroTier's 100.5 MB/s is not a ZeroTier number.** The PC and the box share a
+LAN segment, so ZeroTier negotiated a direct path and never touched a relay.
+The *"1–2 MB/s, a 1 GB asset is ~17 minutes"* comment in `remote.py` — which
+every argument in this document leaned on — **remains unmeasured to this day.**
+Only a phone on mobile data can produce it.
+
+**The two 12.8 GB scans cannot complete through the Funnel.** 93.6 minutes
+against gunicorn's `--timeout 3600`, which is 60. The worker is killed
+mid-transfer at the one-hour mark, every time, and patience does not fix it.
+
+### What that makes of Range resume
+
+It stops being a nicety for flaky links and becomes **the only way those two
+assets ever arrive**. `materialise.py` already resumes correctly at the byte
+level — `.part` survives and the next attempt starts at its size — but **nothing
+retries**: when the worker is killed the exception leaves `materialise()` and
+the window reports a failure. The bytes are not lost, and a second attempt does
+resume, but the person has to know to try again and nothing tells them so.
+
+Open, and the halves belong to different sides:
+
+- **client** — retry automatically, resuming from the new offset, bounded, and
+  only while progress is being made. Retrying a transfer that moved zero bytes
+  is a hang and not a drop, and looping on it would hide a real fault.
+- **box** — raise `--timeout`, but not to `0`: a genuinely hung worker should
+  still be reaped.
