@@ -139,9 +139,12 @@ there were **zero named readers** — everything deployed and unused. Felix adde
 one through the panel, used it, and revoked it: **access ended instantly, no
 restart.** That is the mtime reload proven in production, which was the last
 unobserved part of `874f3f7` and the half the design actually turned on. The
-shared token is still live and still held by twenty-five people, so migrating
-them off `ASSETLIB_TOKEN` is the remaining move — it is what turns "who pulled
-this" from *shared* into a name.
+shared token stays live **by decision, taken the same evening**
+(`decisions.md`): retiring it would disconnect twenty-five people at once to fix
+a problem none of them has. Not a task and not an oversight — the path that
+needs no flag day is to hand each of them a named token the next time you speak
+to them anyway, and drop the shared one when the audit log stops printing
+*shared*.
 
 **Also avoided, and it fails silently:** a revoke is **deleting the line, never
 the file**. `rm tokens.json` revokes nobody — the `OSError` path keeps the last
