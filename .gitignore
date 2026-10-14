@@ -5,6 +5,10 @@ _quarantine/
 .assetlib/
 seed.log
 push.log
+
+# Distributable archives built by tools/release.py - 300 MB each, and the
+# published copy lives on a GitHub release rather than in the history.
+dist/
 __pycache__/
 *.pyc
 Concrete/

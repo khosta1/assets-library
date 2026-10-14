@@ -44,7 +44,8 @@ SKIP_DIRS = {
 DEV_DIRS = {"docs", "tools", "Build_docs", "server"}
 DEV_FILES = {"CLAUDE.md", "ROADMAP.md", "packs.json", ".gitignore"}
 
-SKIP_FILES = {"seed.log", "launch.log", "desktop.ini", "Thumbs.db"}
+SKIP_FILES = {"seed.log", "launch.log", "push.log", "port.log",
+              "desktop.ini", "Thumbs.db"}
 SKIP_SUFFIXES = {".pyc", ".lnk"}
 
 # Created empty in the new copy. ensure_roots() would make them on first launch
