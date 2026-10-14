@@ -29,6 +29,33 @@
 - `D1` script/tool handling — import, tag, launch. **Launch done 2026-09-13**;
   copy-with-update (`refresh_from_source()`) not started. See Phase 5
 
+**Sharing the library** — `docs/public-access.md`
+
+- `E1` **reach** — let people who are not on ZeroTier read the library.
+  **done 2026-10-14.** Not the direct 443 + Caddy + domain route this was first
+  planned as: the box already ran a Tailscale Funnel, so it was one
+  `tailscale funnel --https=10000 127.0.0.1:8083`. Verified from outside —
+  `200`, 277 assets, 0.018 s, certificate valid, and the name resolves to
+  Tailscale's public edge rather than the tailnet, so it was a real external
+  test. No domain, no certificate lifecycle, no NAT rule, no port opened, and
+  the server repo's "nothing exposed except through Tailscale" invariant intact.
+- `E2` **onboarding** — what a new reader needs before they can use that.
+  *Half done.* `tools/release.bat` builds the 293 MB app+runtime archive
+  (`9bc9042`) and **no archive has been built**; per-reader tokens are written
+  (`874f3f7`) and **the deploy to `/opt/assetlib` is queued, not confirmed**.
+  Until both land, a 26th reader means handing over a folder by hand and
+  sharing the one secret twenty-five people already hold.
+- `E3` **administration** — managing readers, once there are readers.
+  *Not started.* Today adding one means `ssh` to the box and editing
+  `/etc/assetlib/tokens.json` by hand, and answering "who pulled that" means
+  `journalctl`. Neither is wrong; both are a person with root doing by hand
+  what they will do weekly. What it would cover: add and revoke a reader, see
+  what each has taken, and notice a token being used in a way nobody intended.
+  **Scope is a reading, not a brief** — recorded 2026-10-14 from "put
+  administration just after onboarding", and meant as *reader* administration
+  rather than the library-side admin that already exists (removing an asset
+  from a server, `_trash/`). Correct it before anything is built.
+
 **Housekeeping**
 - `C1` verify the three unverified type signatures (see below)
 - `C4` updating the app itself — **done 2026-10-05**, `assetlib/update.py` +
