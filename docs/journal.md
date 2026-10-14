@@ -4,6 +4,60 @@ Newest first.
 
 ---
 
+## 2026-10-14 — 147 from Poly Haven
+
+One session running from 10-05, with two others working on the same tree
+today. The Houdini half of this session's work went out inside their commit
+`93842b5`, by agreement, because their texture→material build sits on it.
+
+**Done.**
+
+- **File variants → one USD variant set** (10-05, in `93842b5`) —
+  `_build_all` builds every file variant as one component;
+  `_build_sop_karma_component_variants` takes pieces (whole file or prim
+  `name`). `matted_pratia` built eight components before.
+- **HDRI → dome light** (10-09, in `93842b5`) — `karma_component` dispatches on
+  type; bake once into `derived/`, localize copies only that image, refused on
+  an unsaved scene (`_saved_hip`, mesh localize too).
+- **Five ground categories + `ground_and_terrain` sidebar group** (`a3d52cc`) —
+  `groups` in `categories.json`, `cat:a,b` in `index.search`.
+- **`fetch_polyhaven.py` + `port.py` ports textures** (`a12147e`) — the mesh
+  gate had planned every texture set as "no mesh".
+- **Poly Haven Ground & Terrain ported** (`72592a9`) — 147 imported, 0 failed,
+  32.6 GB; deep verify 0 errors on them; `_inbox` deleted. Library: 278.
+- **`docs/polyhaven.md`** new; `porting.md` step 0, traps 7–9; `sources.md`.
+
+**Decided.**
+
+- **A category group is a sidebar heading, not a folder** — `decisions.md`;
+  nested folders and one-category-plus-tag rejected there.
+- **Fetchers may live beside `port.py`** — `decisions.md`, Reversed: writes only
+  `_inbox/`, imports nothing from `assetlib`, decides nothing.
+- **Poly Haven's own categories are the declarations**, through a table in
+  `polyhaven.md`; Felix confirmed all 147 as is.
+- **`rough_ao` and `rough_diff` dropped at fetch**, not given a slot rule — one
+  vendor so far (porting trap 5's reasoning).
+- **Laya shelved** as a pre-fill for sources without categories: 76% agreement,
+  91% at confidence ≥ 0.5 on 59% of assets; Poly Haven's human labels beat it.
+  Kept out of the library — torch cannot ship in `runtime/`.
+- **Fab has no public API** (planned, not shipped); its route is the Launcher's
+  batch export to a socket. Nothing built.
+
+**Open.**
+
+- **Unobserved in Houdini:** the pratia variant set; the dome light — its node
+  types (`domelight::3.0`, `::2.0`), the parm `xn__inputstexturefile_r3ah` and
+  `hou.hipFile.isNewFile()` are guessed with fallbacks.
+- **`fetch_polyhaven.py` as committed has never run** — the scratchpad copy did.
+- **The 147 are only on `H:`.** The box needs the five new categories in its
+  config before they are pushed, or its `verify` flags all of them.
+- **Deep verify found older damage**, not from this port: ~60 RenderMan `.tex`
+  missing from `extra/`, and `texturingxyzfemale_02` with 14 textures gone and
+  two dangling slots. In ROADMAP *Open bugs*.
+
+**Next.** Import `matted_pratia` and one HDRI into Houdini and look at the
+variant set and the dome — the two builds that have never been seen.
+
 ## 2026-09-13 (last) — clicked
 
 Sixth entry today, and the short version is three words: **it ran.** Both

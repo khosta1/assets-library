@@ -8,11 +8,19 @@
   2026-09-13** (`fb379c6`), `.tx` and `.usda` not started
 - `A3` Maya, Blender, Unreal adapters
 - `A4` USD variant sets built from the library's variant bindings, not from a
-  cooked probe — see Phase 3b
+  cooked probe — **file variants built 2026-10-05** (in `93842b5`), not yet
+  observed in Houdini. See Phase 3b
+- `A5` HDRI → dome light — **built 2026-10-09** (in `93842b5`), not yet
+  observed in Houdini
 
 **Filling the library**
 - `B1` bulk migration — **started 2026-09-13**, FabLibrary done: 36 assets,
-  75 → 111. Procedure in `docs/porting.md`; see Phase 4
+  75 → 111. **Poly Haven Ground & Terrain done 2026-10-14**: 147 textures
+  (`72592a9`). Procedure in `docs/porting.md`, fetch in `docs/polyhaven.md`;
+  see Phase 4
+- `B4` Laya as the declaration pre-fill for sources with no categories —
+  **parked 2026-10-14**: tried once on Poly Haven (76%, 91% at conf ≥ 0.5),
+  not needed where the vendor has a taxonomy. `docs/polyhaven.md`
 - `B2` zip auto-extraction on import
 - `B3` dedup in the UI — `index.find_by_hash()` is a stub; the hashes are
   already in every `asset.json`
@@ -131,7 +139,14 @@ the two hold the main thread differently.
 `verify` warnings) can finally be deleted, because `A2` stops them coming back.
 Deleting them before this landed would have been pointless.
 
-### Phase 3b — `A4` variant sets from the bindings — *not started*
+### Phase 3b — `A4` variant sets from the bindings — **file variants built 2026-10-05**
+
+**Built, not observed:** with Variant on *all* and several files, `_build_all`
+now makes ONE component whose variant set has one entry per file, named from
+`asset.representations[].variant`; the checkbox adds each file's prim-`name`
+pieces to the same set (`big_<piece>`). The probe survives for that checkbox
+only. A `.usd` variant still builds one chain per file. What follows is the
+state before, kept as the argument.
 
 The library now knows about variants properly, and Houdini does not use that.
 
@@ -181,6 +196,14 @@ until the failure modes are known and only then loop.
 
 **The 36 are only on `H:` and the box is the master** — they still need the SMB
 push and a re-index, after which `/api/health` should read 111.
+
+**Second run, 2026-10-14 — Poly Haven Ground & Terrain, 147 textures** fetched
+from the API with `fetch_polyhaven.py`, declared from Poly Haven's own
+categories, sampled (9, one per category plus the odd map sets), looped, deep
+verified with 0 errors, `_inbox` deleted. Two traps caught by the sample
+(porting.md 8–9). Not pushed to the box: its config needs the five new
+categories first. Left at Poly Haven: 720 textures, 997 HDRIs, 521 models, each
+needing its own category table.
 
 Left in this source: 8 usdz-only assets and one manifest-only, skipped rather
 than solved. Left overall: `H:/3D/Maya/assets`, `H:/3D/Insect/Texture`, and the
@@ -280,6 +303,26 @@ thing in front rather than the thing being deferred.
 ---
 
 ## Open bugs
+
+**Open from 2026-10-14** (Poly Haven port and deep verify):
+
+- **Older packages are damaged, and this port did not do it.** Deep verify,
+  run before deleting `_inbox`: ~60 *hashed file missing* on RenderMan `.tex`
+  in `extra/` — `fabric030`, the four TCom textures, `scratcheslight001`,
+  `barren_brome`, and `mushroom_flyagaric`, whose paths read
+  `extra/extra/extra/extra/extra/extra/…`. `scan/surface/texturingxyzfemale_02`
+  has 14 textures gone, its `diffuse` and `disp` slots pointing at nothing.
+  Cause unknown; the `.tex` ones may be the `derived_ext` routing change.
+- **Karma writes `.jpg.rat` into `tex/` of a texture set built without the
+  bake** — 13 *nothing points at* warnings on three Poly Haven samples already
+  rendered in Houdini. Porting trap 6, now reachable from the material build.
+- **The 147 Poly Haven textures are only on `H:`.** The box's config lacks the
+  five new categories; push it first or its `verify` flags every one.
+- **`fetch_polyhaven.py` as committed has never run** — category as an
+  argument, roots from config; the logic ran from a scratchpad copy.
+- **HDRI dome light: node and parm names guessed** — `domelight::3.0` then
+  `::2.0`, `xn__inputstexturefile_r3ah` then any parm named *texturefile*, and
+  `hou.hipFile.isNewFile()`. Not run in Houdini.
 
 **Open from 2026-10-14** (drag a tile into Houdini):
 

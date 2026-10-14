@@ -165,6 +165,10 @@ committed.
   fetcher, not a front-end (`decisions.md`, Reversed). Its logic ran for
   Ground & Terrain from a scratchpad copy; the repo version (category as an
   argument, roots read from config) has not run yet.
+- **File variants → one USD variant set** — added 2026-10-05, *built, not yet
+  observed in Houdini*. Variant *all* with several mesh files builds one
+  component, one variant set entry per file; the prim-`name` checkbox adds each
+  file's pieces to the same set. A `.usd` variant still builds one chain per file.
 - **Sidebar category groups** — added 2026-10-14, *built, not yet observed*.
   `groups` in `categories.json` nests categories under a heading in the
   sidebar (`texture ▸ ground_and_terrain ▸ dirt, sand, …`); the group node
