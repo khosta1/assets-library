@@ -45,6 +45,17 @@
   (`874f3f7`) and **the deploy to `/opt/assetlib` is queued, not confirmed**.
   Until both land, a 26th reader means handing over a folder by hand and
   sharing the one secret twenty-five people already hold.
+- `E4` **resume that survives the timeout** — *planned 2026-10-14, not started.*
+  The two 12.8 GB scans cannot complete through the Funnel: 91 projected
+  minutes against gunicorn's 60-minute `--timeout`. **And the client makes it
+  worse than a failure** — see *Open bugs*. Five changes in dependency order:
+  (1) tell incomplete apart from corrupt, which alone makes the asset reachable
+  by manual retries; (2) one exception type out of `fetch_file`, since the read
+  loop's failures escape raw today; (3) the retry loop itself, bounded and only
+  while progress is being made; (4) progress accounting that survives a second
+  pass; (5) say which pass it is on, and that a failure keeps its bytes. The
+  box's half — raising `--timeout` without setting it to `0` — is
+  `server-a9`'s.
 - `E3` **administration** — managing readers, once there are readers.
   *Not started.* Today adding one means `ssh` to the box and editing
   `/etc/assetlib/tokens.json` by hand, and answering "who pulled that" means
@@ -330,6 +341,21 @@ thing in front rather than the thing being deferred.
 ---
 
 ## Open bugs
+
+**Open from 2026-10-14** (the measurement):
+
+- **A truncated download is treated as corrupt, and its bytes are thrown
+  away.** The real shape of the 12.8 GB problem, and worse than "it shows an
+  error". When gunicorn's worker is killed mid-transfer the socket closes
+  cleanly, so `resp.read()` returns `b''`, the read loop in `fetch_file` breaks
+  **normally**, and `fetch_file` returns with no exception at all. Then
+  `materialise.py` hashes a part-file against the whole file's digest, gets
+  "hash mismatch", and **unlinks it** — discarding ~8.6 GB. The comment above
+  that `unlink` is right about corruption and wrong about truncation.
+  `_verify()` only hashes and never compares size, and the loop has `size` from
+  the manifest at `materialise.py:194` and never uses it. Consequence: every
+  attempt costs an hour and 8.6 GB and ends exactly where it started, so **a
+  retry loop added before this fix would spin forever**. `E4` change 1.
 
 **Open from 2026-10-14** (Poly Haven port and deep verify):
 
