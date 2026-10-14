@@ -18,7 +18,7 @@ between the layers, marks design rules **RULE**, and ends with the
 |---|---|
 | `docs/architecture.md` | the map + the invariants — **read before touching anything** |
 | `docs/decisions.md` | what was decided and why, and the **central decision that must not be reopened** |
-| `docs/gotchas.md` | twenty-one traps that each cost an hour once |
+| `docs/gotchas.md` | twenty-two traps that each cost an hour once |
 | `docs/features.md` | what is LIVE / DORMANT / VESTIGIAL / REMOVED |
 | `docs/History/` | removed code and why — the CLI, the original draft |
 | `docs/machine.md` | paths, Houdini versions, disks — the only machine-specific file |
@@ -142,7 +142,7 @@ OpenEXR 3.4.14, xxhash 4.0.1.
   the word, make the routine calls yourself.
 - **No verification loops.** Do not write or run a test, a benchmark or a probe
   script without asking first. One pass, one report; Felix observes the app.
-- **Check `docs/gotchas.md` before debugging an import.** Twenty-one of them
+- **Check `docs/gotchas.md` before debugging an import.** Twenty-two of them
   are already written down, and they are the expensive ones.
 - **Check `docs/decisions.md` before proposing a design.** The central decision
   — the library is prescriptive, not adaptive — has already been challenged

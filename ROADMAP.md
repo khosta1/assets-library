@@ -281,6 +281,54 @@ thing in front rather than the thing being deferred.
 
 ## Open bugs
 
+**Open from 2026-10-14** (drag a tile into Houdini):
+
+- **Built, not run as a build.** The route was probed in Houdini 21 from both
+  windows (3 drops claimed, gotcha 22); the options window, the build and the
+  placement at the cursor are `compileall` only. The probe is deleted; its logs
+  stay in `.assetlib/drop_probe*.log`.
+- **A batch fans out by a fixed `DROP_STEP` (6 units)**, not by measured
+  width. A wide chain can overlap the next one.
+- **Variants built as separate chains** (`.usd` variants, one chain per file)
+  all take the same drop point and stack. Mesh variants as one USD variant
+  set are one chain and are unaffected.
+- **Not tried in 22.** The registry hand-off in `nodegraph/dragdrop.py` is
+  correct by reading SideFX's 22.0.368 file only.
+- **Texture set dropped with a library selected made a NEW library** — seen
+  by Felix in 21, fixed, not re-run. The selection is now recorded while the
+  drag hovers and carried in `opts["drop"]["matlib"]`. The cause is inferred,
+  not observed: something between the release and the deferred build left
+  `hou.selectedNodes()` without the library. If the fix does not hold, the
+  selection was already gone DURING the hover - check that next.
+
+**Open from 2026-10-14** (card tiles, Details mode):
+
+- **Not run.** `compileall` + import only. The card geometry, the clip, the
+  badge and the Details rows are correct by reading; nothing has been seen.
+- **Black cards in the Houdini panel — fixed, not re-run.** The card greys were
+  `Base.lighter()`, and in Houdini Base is black, which no factor lightens.
+  Now taken from a fixed `theme._ground()`. Seen broken in Houdini; the fix is
+  not yet seen there.
+- **Local tiles show `?` until F5.** Rows indexed before `slots`, `variants`
+  and `lods` existed are NULL; the status bar says so while Details is on.
+- **Server tiles show `?` until the box is updated.** Needs `assetlib/index.py`
+  and `server/api.py` on `/opt/assetlib` together, then a re-index. Not done:
+  the box is touched only when asked by name.
+
+**Open from 2026-10-14** (texture set → material):
+
+- **Not run in Houdini.** `compileall` only. `nameComponents()[2]` as the
+  `materiallibrary` test, `hou.ui.paneTabOfType()` for the editor's folder and
+  the default `matpathprefix` of a new library are correct by reading only.
+- **Standalone multi-select builds only the last asset.** `send()` is called
+  per asset and `request.json` is overwritten each time ("not a queue"), so the
+  shelf sees one. True for meshes since `A1`; texture batches will hit it
+  first. The panel route is unaffected.
+- **A build that raises can leave an empty library.** The new
+  `materiallibrary` is made before the bake, so a batch can find it. A failed
+  or skipped bake still builds from the source textures; a build that raises
+  leaves the library in `/stage` with nothing in it.
+
 **Open from 2026-10-05** (the updater):
 
 - **Never run.** `assetlib/update.py` compiles and imports; no call has been

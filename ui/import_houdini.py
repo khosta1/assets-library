@@ -7,10 +7,13 @@ carried its own browser, its own options popup and its own idea of what a normal
 map was called, and keeping a second copy of all that agreeing with this one is
 the drift this project exists to prevent.
 
-Two ways out, one entry point:
+Three ways in, one entry point:
 
   in a Houdini Python Panel -> call the builder directly, same process
   standalone                -> write .assetlib/request.json, the shelf reads it
+  a tile dropped on a network editor, from either window
+                            -> runs IN Houdini (assetlib_hou/drop.py), so it is
+                               the first case, with the nodes put at the cursor
 
 Which one happens is a detail of who imported this module. The options are
 identical either way, so nothing about the asset depends on how the window was
@@ -25,7 +28,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog,
                                QHBoxLayout, QLabel, QPushButton, QRadioButton,
-                               QVBoxLayout)
+                               QVBoxLayout, QWidget)
 
 from assetlib import derived
 from assetlib.model import Asset, res_width
@@ -44,6 +47,42 @@ def _heading(text: str) -> QLabel:
     return label
 
 
+def _box(parent: QVBoxLayout, visible: bool) -> QVBoxLayout:
+    """Section that can hide as one. Hidden, not skipped: options() still
+    reads every widget, and a build ignores what it does not use."""
+    box = QWidget()
+    lay = QVBoxLayout(box)
+    lay.setContentsMargins(0, 0, 0, 0)
+    lay.setSpacing(8)
+    box.setVisible(visible)
+    parent.addWidget(box)
+    return lay
+
+
+def _matlib_target(drop: dict | None = None) -> str:
+    """Where a texture set's material goes, said before it goes there.
+
+    Asks the same two functions the builder will, in the same order - a window
+    that says "new library" over a drop that will use the selected one is
+    worse than saying nothing.
+    """
+    if in_houdini():
+        try:
+            from assetlib_hou import build
+
+            lib = build.dropped_matlib(drop) or build.find_matlib()
+            if lib is not None:
+                return f"Into <b>{lib.path()}</b>, the material library chosen in Houdini."
+            return ("No material library is selected in Houdini, so a new one is "
+                    "made in /stage - unwired, and selected, so the next import "
+                    "lands in it too.")
+        except ImportError:
+            pass
+    return ("Into the material library selected in Houdini when the shelf's "
+            "<i>Build last request</i> runs - or a new one in /stage, unwired, "
+            "when none is.")
+
+
 class HoudiniImportDialog(QDialog):
     """What to build, and how. Everything here is a choice the builder obeys.
 
@@ -53,7 +92,12 @@ class HoudiniImportDialog(QDialog):
     instead of leaving them in the filenames.
     """
 
-    def __init__(self, asset: Asset, cfg, parent=None, count: int = 1):
+    def __init__(self, asset: Asset, cfg, parent=None, count: int = 1,
+                 mesh: bool = True, hdri: bool = False, texture: bool = False,
+                 drop: dict | None = None):
+        # mesh/hdri/texture: what the WHOLE selection holds, not the first
+        # asset - a selection led by an HDRI may still hold meshes that need
+        # opacity.
         super().__init__(parent)
         self.asset = asset
         self.count = count
@@ -89,16 +133,37 @@ class HoudiniImportDialog(QDialog):
             warn.setStyleSheet("padding:6px 0;")
             lay.addWidget(warn)
 
+        # shader box: mesh + texture set. geometry box: mesh only.
+        mlay = _box(lay, mesh or texture)
+        glay = _box(lay, mesh)
+
+        if texture:
+            lay.addWidget(_heading("Material library"))
+            note = QLabel("Each texture set becomes one Karma MaterialX material.<br>"
+                          + _matlib_target(drop))
+            note.setWordWrap(True)
+            lay.addWidget(note)
+
+        if hdri:
+            lay.addWidget(_heading("HDRI"))
+            note = QLabel("Each HDRI becomes a dome light with its image loaded.")
+            note.setWordWrap(True)
+            lay.addWidget(note)
+
         # --- opacity -------------------------------------------------------
-        lay.addWidget(_heading("Opacity"))
+        mlay.addWidget(_heading("Opacity"))
         self.op_none = QRadioButton("None")
         self.op_stencil = QRadioButton("Karma stencil map   (faster, SpeedTree-style)")
         self.op_shader = QRadioButton("Opacity shading   (higher fidelity, slower)")
         group = QButtonGroup(self)
         for rb in (self.op_none, self.op_stencil, self.op_shader):
             group.addButton(rb)
-            lay.addWidget(rb)
-        self.op_stencil.setChecked(True)
+            mlay.addWidget(rb)
+        # A stencil sits on geometry and a texture set has none, so without a
+        # mesh in the selection it is not offered: the shader is the only place
+        # left for the map.
+        self.op_stencil.setVisible(mesh)
+        (self.op_stencil if mesh else self.op_shader).setChecked(True)
 
         # Greying out only makes sense for ONE asset. Across a selection, the
         # asset the dialog was read from may be the only one without an opacity
@@ -114,25 +179,25 @@ class HoudiniImportDialog(QDialog):
             self.op_none.setChecked(True)
             note = QLabel("no opacity map in this asset")
             note.setEnabled(False)
-            lay.addWidget(note)
+            mlay.addWidget(note)
 
         # --- displacement ---------------------------------------------------
-        lay.addWidget(_heading("Displacement"))
+        mlay.addWidget(_heading("Displacement"))
         self.disp = QCheckBox("Add mtlxdisplacement node")
         self.disp.setEnabled(count > 1 or "disp" in (asset.textures or {}))
         if not self.disp.isEnabled():
             self.disp.setText("Add mtlxdisplacement node   (no disp map in this asset)")
-        lay.addWidget(self.disp)
+        mlay.addWidget(self.disp)
 
         # --- resolution -----------------------------------------------------
         sizes = list(asset.fields.get("resolutions") or [])
         if len(sizes) > 1:
-            lay.addWidget(_heading("Resolution"))
+            mlay.addWidget(_heading("Resolution"))
             self.res = QComboBox()
             self.res.addItem(f"biggest  ({sizes[0]})", BIGGEST)
             for label in sorted(sizes, key=res_width, reverse=True):
                 self.res.addItem(label, label)
-            lay.addWidget(self.res)
+            mlay.addWidget(self.res)
         else:
             self.res = None
 
@@ -140,28 +205,36 @@ class HoudiniImportDialog(QDialog):
         variants = sorted({e.get("variant") for e in (asset.representations or [])
                            if e.get("variant")})
         if variants:
-            lay.addWidget(_heading("Variant"))
+            glay.addWidget(_heading("Variant"))
             self.variant = QComboBox()
             self.variant.addItem(f"all  ({', '.join(variants)})", ALL_VARIANTS)
             for name in variants:
                 self.variant.addItem(name, name)
-            lay.addWidget(self.variant)
+            glay.addWidget(self.variant)
         else:
             self.variant = None
 
         # --- geometry -------------------------------------------------------
-        lay.addWidget(_heading("Geometry"))
-        self.varset = QCheckBox("Build a USD geometry variant set   (one per prim 'name')")
+        glay.addWidget(_heading("Geometry"))
+        self.varset = QCheckBox("Also split each file by prim 'name' into the variant set")
         self.varset.setToolTip(
-            "Reads distinct prim 'name' values INSIDE one geometry file.\n"
-            "Unrelated to the Variant above, which is a second mesh file.")
-        lay.addWidget(self.varset)
+            "Variant 'all' with several mesh files always builds ONE component\n"
+            "with one USD variant set, one entry per file.\n\n"
+            "This adds the distinct prim 'name' values found INSIDE each file -\n"
+            "old Megascans plants hold several plants in one _big.fbx.\n"
+            "Leave off when the named pieces are parts (stem, leaves), not plants.")
+        glay.addWidget(self.varset)
 
         self.localize = QCheckBox("Localize to $HIP   (copy asset + textures, use $HIP paths)")
         self.localize.setToolTip(
             "Off: the network points into the library, which is what makes an\n"
             "asset shared rather than copied. On: the scene becomes portable\n"
-            "without the library, at the cost of a second copy on disk.")
+            "without the library, at the cost of a second copy on disk.\n\n"
+            "An HDRI copies only the image its dome light reads.\n"
+            "Refused on an unsaved scene: save the hip file first.")
+        # On by default for HDRIs alone: a sky is one file, and a scene that
+        # lights from the library breaks the moment it leaves this machine.
+        self.localize.setChecked(hdri and not mesh)
         lay.addWidget(self.localize)
 
         self.bake = QCheckBox("Use .rat textures   (bake missing ones into derived/)")
@@ -174,7 +247,8 @@ class HoudiniImportDialog(QDialog):
             "First build of an asset pays the conversion (~1s per 2K map, ~5s\n"
             "per 8K); after that they are reused. A .rat is about 3x the size of\n"
             "its source and lives in derived/, which is deletable and is never\n"
-            "sent to the server."
+            "sent to the server.\n\n"
+            "An HDRI is baked once, in the library, then copied if localized."
             + ("" if derived.available() else
                "\n\nDisabled: iconvert was not found. It ships with Houdini."))
         lay.addWidget(self.bake)
@@ -228,6 +302,61 @@ def in_houdini() -> bool:
         return True
     except Exception:                                # noqa: BLE001
         return False
+
+
+HOUDINI_TYPES = ("hdri", "texture")      # built without a mesh
+DROP_STEP = 6.0      # network units between the assets of one drop
+
+
+def buildable(asset: Asset) -> bool:
+    """mesh -> component, HDRI -> dome light, texture set -> material.
+
+    The Asset twin of app._houdini_buildable(), which asks the index row so a
+    right-click never reads asset.json. A drop has read it already.
+    """
+    from assetlib.index import has_geometry
+
+    return asset.type in HOUDINI_TYPES or bool(has_geometry(asset))
+
+
+def ask_and_send(assets: list, cfg, parent, drop: dict | None = None):
+    """[(Asset, dir)] -> the options window -> build each. Right-click and drop.
+
+    One function for both, so a drop cannot grow options a right-click lacks.
+    `drop` is {"network", "pos"} from the network editor; each asset of a batch
+    lands DROP_STEP further right, never stacked on one spot.
+
+    Returns (built, failed) - None when the window was cancelled. Reporting is
+    the caller's: the browser has a status bar, Houdini has its own.
+    """
+    # The window is built from the FIRST asset and its answers are applied to
+    # all of them. A real hazard when the selection is mixed - see ROADMAP.md
+    # - so the window says so rather than pretending the options describe
+    # every asset.
+    types = {a.type for a, _ in assets}
+    dialog = HoudiniImportDialog(assets[0][0], cfg, parent,
+                                 count=len(assets),
+                                 mesh=bool(types - set(HOUDINI_TYPES)),
+                                 hdri="hdri" in types,
+                                 texture="texture" in types,
+                                 drop=drop)
+    if dialog.exec() != QDialog.Accepted:
+        return None
+
+    opts = dialog.options()
+    built, failed = 0, []
+    for i, (asset, path) in enumerate(assets):
+        each = dict(opts)
+        if drop:
+            each["drop"] = dict(drop)
+            if "pos" in drop:
+                each["drop"]["pos"] = [drop["pos"][0] + i * DROP_STEP, drop["pos"][1]]
+        try:
+            send(asset, path, cfg, each)
+            built += 1
+        except Exception as exc:                        # noqa: BLE001
+            failed.append(f"{asset.name}: {exc}")
+    return built, failed
 
 
 def send(asset: Asset, asset_dir: Path, cfg, opts: dict) -> str:

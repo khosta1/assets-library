@@ -105,6 +105,28 @@ not restyle the host.
 
 **Add and Edit still belong in the standalone app** — Houdini has no xxhash.
 
+### Drag a tile onto the network editor
+
+From **either** window — the standalone app or the panel — drag one tile or a
+selection onto a network editor and let go. The Import-to-Houdini options
+window opens, and the nodes are built **where the mouse let go**: the top node
+centred on that point, a batch fanned out to the right. Dropped inside a
+`materiallibrary`, a texture set lands in that library.
+
+Nothing extra to install: `scripts/nodegraph/dragdrop.py` is under the
+package's `path`. Everything after the drop runs in Houdini — the window the
+tile came from only supplies JSON naming the package folders
+(`assetlib_hou/drop.py`).
+
+**That file replaces SideFX's of the same name** — Houdini uses the first one
+on its path. In 21 theirs is a stub; in 22 it delegates to the `nodegraphdrop`
+registry, and ours hands every drag that is not a library tile to that registry
+exactly as theirs does. **Diff it against
+`$HFS/houdini/scripts/nodegraph/dragdrop.py` after every Houdini update.** See
+`docs/gotchas.md` 22.
+
+Server-only tiles cannot be dragged: there is no package on this disk to build.
+
 ### The shelf — three buttons
 
 **Seam test** — run this first, once per Houdini version. It checks the four

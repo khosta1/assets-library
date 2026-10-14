@@ -249,7 +249,7 @@ def _promote_lod_geo(asset: Asset) -> None:
         # only while representations could hold nothing else. Since a root-level
         # primary now binds here too, an unguarded assignment would declare a
         # .jpg to be the level's mesh - and `geo` is exactly what
-        # index._has_geometry() reads, so the asset would offer *Import to
+        # index.has_geometry() reads, so the asset would offer *Import to
         # Houdini* and hand the builder an image to load as geometry.
         mesh = next((e["file"] for e in entries
                      if (e.get("file") or "").startswith("geo/")), None)

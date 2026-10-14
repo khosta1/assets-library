@@ -30,16 +30,30 @@ def apply(app: QApplication) -> None:
     app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
 
 
+def _ground() -> QColor:
+    """The grey every card step is taken from: #2d2d2d, Base of the forced
+    dark scheme, held as a VALUE rather than read from the palette.
+
+    It used to be read, and it broke the first time the grid ran as a guest.
+    Inside Houdini the panel deliberately skips apply(), so the palette is
+    Houdini's - and Houdini's Base is black. lighter() multiplies the HSV value,
+    and black times anything is black, so every card, well and outline came out
+    #000000 (2026-10-14). Tracking a palette only helps when the palette is
+    ours; a host's can be anything, and the window is dark in both places.
+    """
+    return QColor(45, 45, 45)
+
+
 def tile_colour() -> QColor:
     """Placeholder tile, drawn until the real thumbnail arrives.
 
-    Lightened Base, not QPalette.Mid. Mid resolves to #282828 under the forced
-    dark scheme, which is DARKER than Base (#2d2d2d) - the tile would be a hole
-    in the grid rather than a shape in it. The literal this replaced was
-    #3a3a3e, deliberately a step lighter than its ground, and lighter(130)
-    lands in the same place while still tracking the palette.
+    A step above the ground, not QPalette.Mid. Mid resolves to #282828 under
+    the forced dark scheme, which is DARKER than Base (#2d2d2d) - the tile
+    would be a hole in the grid rather than a shape in it. The literal this
+    replaced was #3a3a3e, deliberately a step lighter than its ground, and
+    lighter(130) lands in the same place.
     """
-    return QApplication.palette().color(QPalette.Base).lighter(130)
+    return _ground().lighter(130)
 
 
 def cloud_fill() -> QColor:
@@ -88,3 +102,70 @@ def dim_colour() -> QColor:
     # Qt's own role for this and stays legible on either ground - a literal
     # Qt.gray is a fixed mid-grey and goes muddy the moment the ground darkens.
     return QApplication.palette().color(QPalette.PlaceholderText)
+
+
+# ------------------------------------------------------------------- the card
+#
+# A tile is a card: image well on top, name panel below, one outline around
+# both, so a name can never be read as belonging to the picture beside it.
+# Every step is taken from _ground(), never from the palette - see there.
+
+def card_fill() -> QColor:
+    """Name panel. A step above the grid ground, a step below the placeholder."""
+    return _ground().lighter(118)
+
+
+def card_edge() -> QColor:
+    # outline of an ordinary card. hover: lighter(140) of this.
+    return _ground().lighter(165)
+
+
+def well_colour() -> QColor:
+    """Ground behind the thumbnail: the placeholder's own grey, on purpose.
+
+    Thumbnails are FITTED into the well, never cropped - an HDRI equirect or a
+    vendor sheet would lose content to a crop - so the well shows wherever the
+    image is narrower than 16:9. Colourless, for the same reason the window is
+    dark: anything with a hue shifts how the image beside it reads.
+
+    The same grey, not merely a similar one, because tool icons are composited
+    onto (58,58,58) at import to match tile_colour() (decisions.md, Rejected) -
+    any other well would draw a square round every icon with transparency. A
+    tile still loading then reads as an empty well, not a shape inside one.
+    """
+    return tile_colour()
+
+
+def badge_fill() -> QColor:
+    """Pill under the resolution on the image. Translucent black, deliberately.
+
+    It sits on arbitrary pixels, so it cannot borrow a palette colour that
+    assumes a known ground; black at this alpha keeps light text legible on a
+    white plaster swatch and disappears on a dark one.
+    """
+    return QColor(0, 0, 0, 170)
+
+
+def badge_text() -> QColor:
+    return QColor(235, 235, 235)
+
+
+def chip_colours(kind: str) -> tuple:
+    """(fill, text) of the state chip under the name. Detail mode only.
+
+    The chip is the legend the outline never had: the same blue and the same
+    red, with the word next to them.
+    """
+    if kind == "cloud":
+        return cloud_fill(), cloud_edge().lighter(130)
+    if kind == "local":
+        edge = local_only_edge()
+        return QColor(edge.red(), edge.green(), edge.blue(), 55), edge.lighter(125)
+    # cached: here AND on the server, the state with nothing to worry about,
+    # so it is drawn in the card's own greys.
+    return card_edge(), dim_colour()
+
+
+def pill_fill() -> QColor:
+    # biggest resolution pill. the others: outline only, card_edge().
+    return _ground().lighter(210)

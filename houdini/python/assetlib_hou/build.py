@@ -26,6 +26,7 @@ dialog lives in `ui/import_houdini.py` on the library side.
 from __future__ import annotations
 
 import re
+from contextlib import contextmanager
 from pathlib import Path
 
 import hou
@@ -391,18 +392,28 @@ _STD_TO_OPENPBR_INPUT = {
 }
 
 
-def _build_karma_mtlx(lib_nd, mat_name, textures, create_displacement=True, wire_opacity=True):
+def _build_karma_mtlx(lib_nd, mat_name, textures, create_displacement=True,
+                      wire_opacity=True, unique=False, disp_scale=0.01):
     """Create a Karma MaterialX Builder inside lib_nd and wire textures.
 
     wire_opacity=False  -> skip building the opacity image+wiring entirely
                           (caller will handle opacity via Karma stencil map instead)
+    unique=True         -> name collision: build beside it as MAT_x_1, never replace
+    disp_scale          -> mtlxdisplacement scale. 0.01 matches the mesh build's
+                          cm->m xform; a texture set has no mesh to match
     """
     safe_name = _hou_safe_name(mat_name)
 
-    old = lib_nd.node(safe_name)
-    if old:
-        try: old.destroy()
-        except: pass
+    if unique:
+        # A library the user picked may already hold this material, edited by
+        # hand. Destroying it is a rebuild in a component's own library and a
+        # silent loss in theirs, so a re-import sits beside the old one.
+        safe_name = _uname(lib_nd, safe_name)
+    else:
+        old = lib_nd.node(safe_name)
+        if old:
+            try: old.destroy()
+            except: pass
 
     mat = None
     try:
@@ -487,7 +498,7 @@ def _build_karma_mtlx(lib_nd, mat_name, textures, create_displacement=True, wire
             except Exception:
                 pass
         if disp is not None:
-            try: disp.parm('scale').set(0.01)
+            try: disp.parm('scale').set(disp_scale)
             except: pass
 
     if surface is None:
@@ -708,13 +719,18 @@ def _distinct_variant_names(file_str):
             except Exception: pass
 
 
-def _build_sop_karma_component_variants(stage, asset, file_str, textures,
-                                        variant_names, opacity_mode="none",
-                                        displacement=False):
+def _build_sop_karma_component_variants(stage, asset, pieces, textures,
+                                        opacity_mode="none", displacement=False):
     """Component build with a USD geometry variant set: one componentgeometry per
-    distinct prim 'name' value, collected by a componentgeometryvariants LOP.
+    piece, collected by a componentgeometryvariants LOP.
 
-    Chosen when the imported asset has >1 named piece (e.g. grass OL, OL_001...).
+    `pieces` is [(variant_name, file_str, isolate_name)]. A piece is either a
+    whole FILE (isolate_name None - Fab's `_vara.fbx` ... `_varh.fbx`, one mesh
+    each) or one named prim INSIDE a file (isolate_name set - old Megascans
+    `_big.fbx` holding five plants). The graph does not care which: it took its
+    list only from the prim-name probe, so an asset whose variants are separate
+    files came out as N unrelated components instead of one USD.
+
     All variants share ONE material (same textures). Variant set name is derived
     from the asset name and stays constant across every variant; only the per-
     input 'Geo Variant Name' changes -- that is the golden rule for variant sets.
@@ -729,12 +745,12 @@ def _build_sop_karma_component_variants(stage, asset, file_str, textures,
     variantset = node_name                       # derived from asset, constant across variants
     make_proxy = ('opacity' in textures)
 
-    # -- one componentgeometry per variant, each isolating its 'name' piece --
+    # -- one componentgeometry per piece: own file, or own 'name' in shared file --
     geo_nodes = []
-    for vname in variant_names:
+    for vname, file_str, isolate in pieces:
         cg = stage.createNode("componentgeometry",
                               _uname(stage, node_name + "_geo_" + _hou_safe_name(vname)))
-        _setup_sop_geometry(cg, file_str, make_vdb_proxy=make_proxy, isolate_name=vname)
+        _setup_sop_geometry(cg, file_str, make_vdb_proxy=make_proxy, isolate_name=isolate)
         # "Geo Variant Name" (Advanced tab) -> this input's variant name. Its
         # internal id is 'variantname'; fall back defensively, and even if the
         # set fails the node name carries the variant name as the doc's default.
@@ -827,7 +843,7 @@ def _build_sop_karma_component_variants(stage, asset, file_str, textures,
     if ref is not None:
         nodes.append(ref)
 
-    print(f"[VC] Variants ({len(variant_names)}): {', '.join(variant_names)}")
+    print(f"[VC] Variants ({len(pieces)}): {', '.join(p[0] for p in pieces)}")
     return nodes
 
 
@@ -851,8 +867,10 @@ def _build_sop_karma_component(stage, asset, file_path, opacity_mode="none",
       'shader'  -> opacity texture wired into the surface shader; no stencil node
     displacement=True -> add mtlxdisplacement node inside the MaterialX builder
                          (only if a disp texture was found)
-    make_variants=True -> if the geo has >1 distinct prim 'name', build a USD
-                         geometry variant set instead of a single component.
+    asset["variants"] = [(variant, path)] -> the FILE variants asset.json binds.
+                         More than one always becomes a variant set: the library
+                         recorded them as one asset, so they leave as one USD.
+    make_variants=True -> also split each file by its distinct prim 'name'.
                          Opt-in (off by default) -- see the import dialog checkbox.
     """
     node_name = _hou_safe_name(asset["name"])
@@ -860,13 +878,24 @@ def _build_sop_karma_component(stage, asset, file_path, opacity_mode="none",
     file_str  = _to_hip(file_path)
     textures  = asset["textures"]
 
-    # Multi-variant gate: only when the user opted in AND the imported geo has >1
-    # distinct prim 'name' value (e.g. grass OL, OL_001, ...). Otherwise fall
-    # through to the normal single-component build below.
-    variant_names = _distinct_variant_names(file_str) if make_variants else []
-    if len(variant_names) > 1:
+    # Pieces from both dimensions, flattened into ONE set. Nested sets (size,
+    # then plant) would be truer to the data, but a scatter picks from one
+    # list, and the old per-file build gave each file its own set anyway.
+    files = asset.get("variants") or [(None, file_path)]
+    pieces = []
+    for fvar, path in files:
+        fstr = _to_hip(path)
+        names = _distinct_variant_names(fstr) if make_variants else []
+        if len(names) > 1:
+            # File variant prefixed only when there are several files: one
+            # file's prim names stay exactly what they were before.
+            for n in names:
+                pieces.append((f"{fvar}_{n}" if fvar and len(files) > 1 else n, fstr, n))
+        else:
+            pieces.append((fvar or node_name, fstr, None))
+    if len(pieces) > 1:
         return _build_sop_karma_component_variants(
-            stage, asset, file_str, textures, variant_names,
+            stage, asset, pieces, textures,
             opacity_mode=opacity_mode, displacement=displacement)
 
     geo_nd = stage.createNode("componentgeometry", _uname(stage, node_name + "_geo"))
@@ -1020,6 +1049,65 @@ def _build_usd_karma_reference(stage, asset, file_path, opacity_mode="none", dis
     return nodes
 
 
+# Where a drop asked for the nodes: {"network", "pos"}, or None. Set by
+# karma_component's closure for the length of ONE build and read by _place,
+# instead of threaded through every builder's signature - the ported
+# build_karma_component still speaks the original tool's shape, and a deferred
+# build (textures baking) runs the closure later, which carries this with it.
+_DROP = None
+
+
+@contextmanager
+def _dropped(drop):
+    global _DROP
+    _DROP = drop
+    try:
+        yield
+    finally:
+        _DROP = None
+
+
+def _place(stage, nodes, existing):
+    """Lay out the new nodes, then shift them right of what was already there.
+
+    Shared by the mesh build, the dome light and the material, so a second
+    import never lands on top of the first. A drop overrides the shift.
+    """
+    # Lay out ONLY the new nodes as a connected graph (around origin)
+    try: stage.layoutChildren(items=nodes)
+    except Exception: pass
+
+    # A drop centres the TOP node on the point where the mouse let go - but
+    # only in the network that was dropped on. A texture set dropped on /stage
+    # builds its material inside a library; the library goes to the cursor,
+    # the material inside it is laid out as usual.
+    if _DROP and nodes and stage.path() == _DROP.get("network"):
+        try:
+            x, y = _DROP["pos"]
+            top = max(nodes, key=lambda n: (n.position()[1], -n.position()[0]))
+            (tx, ty), (w, h) = top.position(), top.size()
+            dx, dy = x - (tx + w / 2), y - (ty + h / 2)
+            for n in nodes:
+                p = n.position()
+                n.setPosition([p[0] + dx, p[1] + dy])
+            return
+        except Exception:
+            pass                    # placed as if not dropped, never not placed
+
+    # Shift the new chain so its left edge sits to the right of existing nodes
+    if existing and nodes:
+        try:
+            right_edge = max(c.position()[0] for c in existing) + 4.0
+            min_new_x  = min(n.position()[0] for n in nodes)
+            shift = right_edge - min_new_x
+            if shift > 0:
+                for n in nodes:
+                    pos = n.position()
+                    n.setPosition([pos[0] + shift, pos[1]])
+        except Exception:
+            pass
+
+
 def build_karma_component(asset, opacity_mode="none", displacement=False, make_variants=False):
     """Build a Karma MaterialX setup for an asset.
 
@@ -1036,6 +1124,8 @@ def build_karma_component(asset, opacity_mode="none", displacement=False, make_v
       'shader'  -> opacity texture wired into mtlxstandard_surface.opacity input
                    (higher fidelity / soft alpha; no stencil node created)
     displacement=True -> add mtlxdisplacement node in the MaterialX builder
+    asset["variants"] -> several file variants: one component, one variant set
+                         (SOP formats only)
     make_variants=True -> build a USD geometry variant set for multi-'name' SOP
                          assets (opt-in; ignored for USD assets)
     """
@@ -1062,22 +1152,7 @@ def build_karma_component(asset, opacity_mode="none", displacement=False, make_v
                                             displacement=displacement,
                                             make_variants=make_variants)
 
-    # Lay out ONLY the new nodes as a connected graph (around origin)
-    try: stage.layoutChildren(items=nodes)
-    except Exception: pass
-
-    # Shift the new chain so its left edge sits to the right of existing nodes
-    if existing and nodes:
-        try:
-            right_edge = max(c.position()[0] for c in existing) + 4.0
-            min_new_x  = min(n.position()[0] for n in nodes)
-            shift = right_edge - min_new_x
-            if shift > 0:
-                for n in nodes:
-                    pos = n.position()
-                    n.setPosition([pos[0] + shift, pos[1]])
-        except Exception:
-            pass
+    _place(stage, nodes, existing)
 
     # Snap the standalone preview reference directly under the componentoutput.
     # layoutChildren scatters it (it has no input), so we place it last, after
@@ -1109,6 +1184,8 @@ def build_karma_component(asset, opacity_mode="none", displacement=False, make_v
 
 BIGGEST = "__biggest__"
 ALL_VARIANTS = "__all__"
+HDRI = "hdri"
+TEXTURE = "texture"
 
 
 def texture_rels(asset: Asset, opts: dict) -> dict:
@@ -1220,6 +1297,258 @@ def geometry_for(asset: Asset, asset_dir: Path, opts: dict) -> list:
     return out
 
 
+def hdri_rel(asset: Asset) -> str:
+    """The package-relative image an HDRI is. The primary, else the first.
+
+    An HDRI's `textures` is empty by design - the asset IS the image, so it is
+    bound as a representation, the way a mesh is.
+    """
+    entries = [e for e in (asset.representations or []) if e.get("file")]
+    if not entries:
+        raise RuntimeError(f"{asset.name}: asset.json binds no image")
+    primary = next((e for e in entries if e.get("role") == "primary"), entries[0])
+    return primary["file"]
+
+
+def bake_rels(asset: Asset, opts: dict) -> list:
+    """Every package-relative image this build reads, for the pre-bake.
+
+    The HDRI belongs here as much as any texture does: a 16K .exr is the
+    longest conversion in the library, and left out of this list it would
+    either block Houdini or never be baked - and an unbaked dome is the one
+    Karma converts itself, beside the source, into the library.
+    """
+    if asset.type == HDRI:
+        return [hdri_rel(asset)]
+    return list(texture_rels(asset, opts).values())
+
+
+def _saved_hip() -> str:
+    """$HIP, refusing when the scene was never saved.
+
+    `$HIP` of an untitled scene is not empty and not the literal "$HIP" - it is
+    whatever folder Houdini was started in. Checking only for those two, as
+    this did, let a localize copy hundreds of megabytes into that folder
+    without a word, which became likely the moment localize was ticked by
+    default for HDRIs.
+    """
+    hip = hou.text.expandString("$HIP")
+    if hou.hipFile.isNewFile() or not hip or hip == "$HIP":
+        raise hou.Error("Save the hip file before localizing - an unsaved "
+                        "scene's $HIP is just the folder Houdini started in.")
+    return hip
+
+
+def _localize_file(asset_dir: Path, rel: str, cfg) -> Path:
+    """Copy ONE package file next to the hip file; return the copy.
+
+    The HDRI's localize, which differs from `_localize` on purpose: a dome light
+    reads one image, and copying the package would carry the source .exr AND
+    its .rat - over 400 MB for one sky - to use one of them.
+
+    Same library-relative shape as `_localize`, so the copy stays identifiable.
+    Skipped when the copy is already current: copy2 keeps the mtime, and a
+    second import of the same sky into the same scene should not copy it again.
+    """
+    import shutil
+
+    hip = _saved_hip()
+    root = cfg.root_containing(asset_dir) or cfg.library
+    src = asset_dir / rel
+    dst = Path(hip) / root.name / asset_dir.relative_to(root) / rel
+    if not derived.is_current(src, dst):
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+    return dst
+
+
+def _build_dome_light(asset: Asset, asset_dir: Path, cfg, opts: dict) -> list:
+    """An HDRI becomes a dome light with the image loaded.
+
+    The image is our bake in derived/ whenever one exists. Handing the dome the
+    source is what produced `tcom_norwayforest_hdri_sphere.exr.rat`, 276 MB,
+    written by Karma beside the source inside the library - the same stray
+    textures_for() exists to prevent.
+    """
+    rel = hdri_rel(asset)
+    if not (asset_dir / rel).is_file():
+        raise RuntimeError(f"{asset.name}: {rel} is missing from the package")
+
+    # Already baked by run_when_baked when it could be; ensure() then only
+    # finds it. On the inline fallback it bakes here, like textures_for().
+    if opts.get("derived", True):
+        rel = derived.ensure(asset_dir, rel, generate=opts.get("bake", True)) or rel
+
+    # Bake in the library FIRST, then copy: the conversion is paid once and
+    # every scene reuses it. Baking inside each $HIP copy paid it per scene.
+    image = (_localize_file(asset_dir, rel, cfg) if opts.get("localize")
+             else asset_dir / rel)
+
+    stage = hou.node("/stage") or hou.node("/").createNode("lopnet", "stage")
+    existing = list(stage.children())
+    node_name = _hou_safe_name(asset.name) + "_dome"
+
+    dome = None
+    for ntype in ("domelight::3.0", "domelight::2.0", "domelight"):
+        try:
+            dome = stage.createNode(ntype, _uname(stage, node_name))
+            break
+        except Exception:
+            dome = None
+    if dome is None:
+        raise RuntimeError("Could not create a domelight LOP")
+
+    # inputs:texture:file, which Houdini spells as an encoded parm name. Named
+    # candidates first, then any parm that says texturefile, so a renamed
+    # version still gets its image rather than an empty dome.
+    parm = next((dome.parm(n) for n in ("xn__inputstexturefile_r3ah",
+                                        "xn__inputstexturefile_i1a")
+                 if dome.parm(n) is not None), None)
+    if parm is None:
+        parm = next((p for p in dome.parms() if "texturefile" in p.name()), None)
+    if parm is None:
+        raise RuntimeError(f"{dome.type().name()}: no texture file parameter found")
+    parm.set(_to_hip(image))
+
+    try: dome.setDisplayFlag(True)
+    except Exception: pass
+
+    _place(stage, [dome], existing)
+    print(f"[VC] Dome light DONE: {asset.name} -> {image}")
+    return [dome]
+
+
+def _is_matlib(node) -> bool:
+    try:
+        t = node.type()
+        return (t.category().name() == "Lop"
+                and t.nameComponents()[2] == "materiallibrary")
+    except Exception:
+        return False
+
+
+def _matlib_above(node):
+    """`node` itself, or the nearest materiallibrary above it, else None."""
+    while node is not None:
+        if _is_matlib(node):
+            return node
+        node = node.parent()
+    return None
+
+
+def dropped_matlib(drop):
+    """The library a DROP chose, else None. Read before find_matlib().
+
+    In order: the library the drop landed inside - the network the user let go
+    over, where find_matlib() can only ask whichever network editor Houdini
+    lists first - then the library that was SELECTED while the drag hovered,
+    recorded by drop.py.
+
+    Recorded, not read now, because by now it is gone. Felix, 2026-10-14: a
+    texture set dropped with a library selected made a new library. The build
+    runs deferred, after the drop, and somewhere between the release and the
+    build Houdini's selection no longer held the library - so find_matlib()
+    saw nothing chosen and the rule "else a new one" did exactly what it says.
+    """
+    drop = drop or {}
+    for path in (drop.get("network"), drop.get("matlib")):
+        lib = _matlib_above(hou.node(path)) if path else None
+        if lib is not None:
+            return lib
+    return None
+
+
+def selected_matlib():
+    """A selected materiallibrary, or the one a selected node sits inside."""
+    for node in reversed(hou.selectedNodes()):     # last selected first
+        lib = _matlib_above(node)
+        if lib is not None:
+            return lib
+    return None
+
+
+def find_matlib():
+    """The material library a texture set should land in, or None.
+
+    Read-only: the import dialog calls it to say where the material will go
+    before anything is built.
+
+    Two things count - a selected materiallibrary (or a node selected inside
+    one), and the network editor sitting inside one. Nothing else does, by
+    Felix's instruction (2026-10-14): a library that merely exists in /stage is
+    not one anybody chose, and dropping materials into it would be the import
+    guessing. A drop adds its own two, ahead of these: dropped_matlib().
+    """
+    lib = selected_matlib()
+    if lib is not None:
+        return lib
+    try:
+        editor = hou.ui.paneTabOfType(hou.paneTabType.NetworkEditor)
+        if editor is not None:
+            return _matlib_above(editor.pwd())
+    except Exception:                               # hython, or no editor open
+        pass
+    return None
+
+
+def _target_matlib():
+    """find_matlib(), else a new materiallibrary in /stage.
+
+    The new one is SELECTED, so the next texture set of the same batch finds
+    it: twelve sets become twelve materials in one library, not twelve
+    libraries of one.
+
+    Left unwired, like every chain the mesh build makes. Wiring it after the
+    display node would change what the scene renders, and that is the user's
+    call rather than an import's. matpathprefix stays Houdini's default:
+    /ASSET/mtl/ is the component builds' convention, and this is no component.
+    """
+    lib = find_matlib()
+    if lib is not None:
+        return lib
+    stage = hou.node("/stage") or hou.node("/").createNode("lopnet", "stage")
+    existing = list(stage.children())
+    lib = stage.createNode("materiallibrary", _uname(stage, "assetlib_matlib"))
+    _place(stage, [lib], existing)
+    try: lib.setSelected(True, clear_all_selected=True)
+    except Exception: pass
+    return lib
+
+
+def _build_material(asset: Asset, asset_dir: Path, cfg, opts: dict,
+                    lib_path: str) -> list:
+    """A texture set becomes one Karma MaterialX material in a material library.
+
+    The same shader as a mesh import - _build_karma_mtlx() fed by
+    textures_for() - so a concrete looks the same on the wall it shipped with
+    and on one it was dropped onto. A second shader builder would drift from
+    the first the day either one was fixed.
+    """
+    textures = textures_for(asset, asset_dir, cfg, opts)
+    if not textures:
+        raise RuntimeError(f"{asset.name}: no bound texture matches a known slot")
+
+    # Resolved before the bake. Deleted during it: resolve again, not fail.
+    lib = hou.node(lib_path) or _target_matlib()
+    existing = list(lib.children())
+
+    # Stencil sits on geometry, and a texture set has none. A mixed selection
+    # sends 'stencil' for its meshes; here the map goes into the shader rather
+    # than being dropped, which is the only other place it can go.
+    wire = opts.get("opacity", "none") != "none"
+    disp = bool(opts.get("displacement")) and "disp" in textures
+    # Displacement scale 1, not the mesh build's 0.01: that number undoes the
+    # cm->m xform on a vendor mesh, and a texture set has no mesh to undo.
+    mat = _build_karma_mtlx(lib, "MAT_" + _hou_safe_name(asset.name), textures,
+                            disp, wire_opacity=wire, unique=True, disp_scale=1.0)
+    _place(lib, [mat], existing)
+
+    prefix = lib.parm("matpathprefix")
+    prim = (prefix.evalAsString() if prefix is not None else "") + mat.name()
+    print(f"[VC] Material DONE: {asset.name} -> {lib.path()}  ({prim})")
+    return [mat]
+
+
 def _localize(asset: Asset, asset_dir: Path, cfg) -> Path:
     """Copy the package next to the hip file and return the copy's folder.
 
@@ -1236,9 +1565,7 @@ def _localize(asset: Asset, asset_dir: Path, cfg) -> Path:
     """
     import shutil
 
-    hip = hou.text.expandString("$HIP")
-    if not hip or hip == "$HIP":
-        raise hou.Error("$HIP is not set - save the hip file before localizing")
+    hip = _saved_hip()
 
     # Whichever root holds it. relative_to(cfg.library) raised ValueError on a
     # downloaded asset, and "localize" is exactly the button someone presses on
@@ -1260,13 +1587,44 @@ def karma_component(asset: Asset, asset_dir: Path, cfg, opts: dict | None = None
     Takes truth and a dict of choices; makes nodes. No dialogs, no menus, no
     filesystem walking - every decision was made in `ui/import_houdini.py`
     before this was reached.
+
+    An HDRI becomes a dome light and a texture set a material, not a component.
+    Dispatched HERE so the panel and the shelf's request.json both get it
+    without either knowing.
     """
     opts = dict(opts or {})
-    if opts.get("localize"):
-        asset_dir = _localize(asset, asset_dir, cfg)
+    if asset.type == HDRI:
+        hdri_rel(asset)                    # no image: fail now, not after a bake
+        if opts.get("localize"):
+            _saved_hip()                   # unsaved: refuse before a 16K bake
+        # The library's own dir: the bake lands in its derived/ and the copy
+        # to $HIP happens after, inside the build.
+        def _build():
+            return _build_dome_light(asset, asset_dir, cfg, opts)
+    elif asset.type == TEXTURE:
+        if not asset.textures:
+            raise RuntimeError(f"{asset.name}: asset.json binds no textures")
+        if opts.get("localize"):
+            asset_dir = _localize(asset, asset_dir, cfg)
+        # Target picked NOW, not after the bake. An 8K set bakes for a minute
+        # and the selection may have moved by then; and a batch needs the new
+        # library to exist - selected - before its second asset asks for one.
+        #
+        # A drop's own choice first (dropped_matlib). Inside _dropped, so a
+        # library made here goes to the cursor too.
+        drop = opts.get("drop")
+        with _dropped(drop):
+            lib = dropped_matlib(drop) or _target_matlib()
+        lib_path = lib.path()
 
-    def _build():
-        return _build_all(asset, asset_dir, cfg, opts)
+        def _build():
+            return _build_material(asset, asset_dir, cfg, opts, lib_path)
+    else:
+        if opts.get("localize"):
+            asset_dir = _localize(asset, asset_dir, cfg)
+
+        def _build():
+            return _build_all(asset, asset_dir, cfg, opts)
 
     # Bake first, then build - and when anything has to be baked, RETURN TO
     # HOUDINI in between. The conversion runs on a pool thread and the nodes
@@ -1280,16 +1638,23 @@ def karma_component(asset: Asset, asset_dir: Path, cfg, opts: dict | None = None
     #
     # The consequence is real and is not hidden: a build that had to bake
     # returns None, because the nodes do not exist yet.
+    build_now = _build
+    drop = opts.get("drop")
+
+    def _placed():
+        with _dropped(drop):
+            return build_now()
+
     try:
         from .bakewindow import run_when_baked
 
-        return run_when_baked(asset, asset_dir, opts, _build)
+        return run_when_baked(asset, asset_dir, opts, _placed)
     except Exception as exc:                            # noqa: BLE001
         # Any failure in the deferring machinery falls back to the old
         # behaviour: bake inline inside textures_for() and build now. Slower
         # and it blocks, but it is correct and it returns nodes.
         print(f"[assetlib] deferred bake unavailable ({exc}); building inline")
-        return _build()
+        return _placed()
 
 
 def _build_all(asset: Asset, asset_dir: Path, cfg, opts: dict) -> list:
@@ -1300,16 +1665,29 @@ def _build_all(asset: Asset, asset_dir: Path, cfg, opts: dict) -> list:
     thread.
     """
     textures = textures_for(asset, asset_dir, cfg, opts)
+    geos = geometry_for(asset, asset_dir, opts)
+
+    # Every file variant into ONE component, as a USD variant set. Built one
+    # component per file, `_vara` ... `_varh` came out as eight componentoutputs,
+    # eight materials and eight USD files - the variants were in the library and
+    # nowhere in the result. USD cannot go through componentgeometry, so a
+    # variant held as .usd keeps the old one-chain-per-file build.
+    if len(geos) > 1 and not any(g.suffix.lower() in LOP_EXTS for _, g in geos):
+        groups = [(None, [(v, str(g)) for v, g in geos])]
+    else:
+        groups = [(v, [(v, str(g))]) for v, g in geos]
+
     built = []
-    for variant, geo in geometry_for(asset, asset_dir, opts):
-        # The variant goes in the NODE name, not just the file path. Two
-        # componentoutputs called the same thing would be disambiguated by
-        # _uname into x_output and x_output1, which says nothing about which
-        # mesh is which.
+    for variant, files in groups:
+        # A single chosen variant goes in the NODE name, not just the file
+        # path. Two componentoutputs called the same thing would be
+        # disambiguated by _uname into x_output and x_output1, which says
+        # nothing about which mesh is which.
         legacy = {
             "name": f"{asset.name}_{variant}" if variant else asset.name,
             "dir": str(asset_dir),
-            "file": str(geo),
+            "file": files[0][1],
+            "variants": files if len(files) > 1 else None,
             # Shared deliberately: Megascans ships ONE texture set for both the
             # Big and the Small mesh, and the import recorded it once.
             "textures": textures,

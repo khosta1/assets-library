@@ -26,7 +26,10 @@ CREATE TABLE IF NOT EXISTS assets (
     resolutions TEXT DEFAULT '',
     has_geo     INTEGER,
     tags        TEXT DEFAULT '',
-    created     TEXT
+    created     TEXT,
+    slots       TEXT,
+    variants    TEXT,
+    lods        INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_type_cat ON assets(type, category);
 CREATE VIRTUAL TABLE IF NOT EXISTS assets_fts USING fts5(
@@ -75,6 +78,12 @@ def connect_at(db_path: Path) -> sqlite3.Connection:
         # so local is not a guess - it is the only thing it could have been.
         conn.execute("ALTER TABLE assets ADD COLUMN origin TEXT NOT NULL "
                      "DEFAULT 'local'")
+    # The tile's detail rows. NULL for the same reason as has_geo: a row indexed
+    # before these existed has not been looked at, and the grid says "press F5"
+    # instead of claiming the asset has no maps.
+    for column, kind in (("slots", "TEXT"), ("variants", "TEXT"), ("lods", "INTEGER")):
+        if column not in have:
+            conn.execute(f"ALTER TABLE assets ADD COLUMN {column} {kind}")
     return conn
 
 
@@ -93,7 +102,7 @@ def _res_blob(asset) -> str:
     return (" " + " ".join(str(x) for x in labels) + " ") if labels else ""
 
 
-def _has_geometry(asset) -> int:
+def has_geometry(asset) -> int:
     """1 when the package holds a mesh, 0 when it does not.
 
     Answered here, at index time, because the browser must not read asset.json
@@ -116,6 +125,33 @@ def _has_geometry(asset) -> int:
     return 0
 
 
+def _slots(asset) -> str:
+    """'ao diffuse normal' - the texture slots bound. '' when there are none.
+
+    From the bindings, not `fields.slots_present`: that field is written once
+    at import, and an edit that rebinds a slot changes `textures` without it.
+    Same reason as has_geometry - the bindings are what is true.
+    """
+    return " ".join(sorted(str(s) for s in (asset.textures or {})))
+
+
+def _variants(asset) -> str:
+    """'big small' - every named variant, from either level. '' when none.
+
+    Only the v6 representation `variant`: a second version of the asset that is
+    kept. Texture variants in texture_slots.json are the opposite - one is kept,
+    the rest dropped - so there is nothing of theirs to count.
+    """
+    names = set()
+    entries = list(asset.representations or [])
+    for level in (asset.lods or {}).values():
+        entries += (level or {}).get("representations") or []
+    for entry in entries:
+        if entry.get("variant"):
+            names.add(str(entry["variant"]))
+    return " ".join(sorted(names))
+
+
 def _dir_size(path: Path) -> int:
     return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
 
@@ -133,17 +169,19 @@ def upsert(conn: sqlite3.Connection, asset: Asset, asset_dir: Path,
     tags = " ".join(asset.tags)
     conn.execute(
         "INSERT INTO assets (uuid,name,type,category,path,origin,size,resolution,"
-        "resolutions,has_geo,tags,created) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?) "
+        "resolutions,has_geo,tags,created,slots,variants,lods) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(uuid) DO UPDATE SET name=excluded.name, type=excluded.type, "
         "category=excluded.category, path=excluded.path, origin=excluded.origin, "
         "size=excluded.size, resolution=excluded.resolution, "
         "resolutions=excluded.resolutions, has_geo=excluded.has_geo, "
-        "tags=excluded.tags",
+        "tags=excluded.tags, slots=excluded.slots, variants=excluded.variants, "
+        "lods=excluded.lods",
         (asset.uuid, asset.name, asset.type, asset.category, rel, origin,
          _dir_size(asset_dir) if size is None else size,
          asset.fields.get("resolution"),
-         _res_blob(asset), _has_geometry(asset), tags, asset.created),
+         _res_blob(asset), has_geometry(asset), tags, asset.created,
+         _slots(asset), _variants(asset), len(asset.lods or {})),
     )
     conn.execute("DELETE FROM assets_fts WHERE uuid = ?", (asset.uuid,))
     conn.execute(

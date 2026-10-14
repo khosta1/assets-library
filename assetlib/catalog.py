@@ -20,8 +20,11 @@ from . import index, remote
 # Columns the server sends. Listed rather than SELECT *'d so that a server
 # running ahead of this client adds a column without breaking the insert - the
 # extra field is ignored instead of shifting every value one place left.
+# The reverse holds too: a server behind this client omits the last three, the
+# row.get() below reads None, and the tile shows its detail rows as unknown.
 ROW_FIELDS = ("uuid", "name", "type", "category", "path", "size", "resolution",
-              "resolutions", "has_geo", "tags", "created")
+              "resolutions", "has_geo", "tags", "created", "slots", "variants",
+              "lods")
 
 
 def open_catalog(cfg, host: remote.Host):
@@ -73,8 +76,9 @@ def sync(cfg, host: remote.Host, hosts: list | None = None) -> dict:
             values = [row.get(field) for field in ROW_FIELDS]
             conn.execute(
                 "INSERT INTO assets (uuid,name,type,category,path,size,"
-                "resolution,resolutions,has_geo,tags,created,origin) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                "resolution,resolutions,has_geo,tags,created,slots,variants,"
+                "lods,origin) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (*values, origin),
             )
             conn.execute(

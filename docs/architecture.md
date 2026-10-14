@@ -115,6 +115,14 @@ separate.
 queries FTS5; the grid is a `QAbstractListModel` with uniform item sizes;
 decoding happens on a pool.
 
+**RULE.** A tile draws from its index row and nothing else. Whatever a card
+shows is an index column, derived from `asset.json` at upsert — `has_geo` for
+the context menu, and since 2026-10-14 `slots`, `variants` and `lods` for
+Details. A new card field is a new column and an F5, never a read of
+`asset.json` at paint time. Each is NULL until looked at, which the card shows
+as `?` and keeps apart from `—`, "looked, none". The columns are cached, never
+truth (invariant 1): a deleted `index.db` loses nothing.
+
 ---
 
 ## 4. The package layout
@@ -271,6 +279,16 @@ Everything above, as the list to check a change against. `verify.py` enforces
     - a DCC tool is not offered outside its DCC, because the ImportError would
       read as a broken asset rather than as the wrong host
     - a tool that raises is reported as the *tool* failing, not the library
+16. **A DCC adapter never destroys a node it did not create in the same
+    build** (added 2026-10-14, at Felix's instruction). The scene is the
+    user's, the way the library is: invariant 7, pointed outward.
+    `_build_karma_mtlx()` destroys a same-named material before rebuilding it,
+    which was safe only because the mesh build always makes its own fresh
+    `materiallibrary` to build into. A texture set lands in a library the user
+    *chose*, which may hold that material edited by hand — so it builds with
+    `unique=True` and a re-import sits beside the old one as `MAT_x_1`. Every
+    other `destroy()` in `build.py` hits something made moments earlier: the
+    swapped-out standard surface, the throwaway `name` probe in `/obj`.
 
 ---
 
@@ -286,16 +304,39 @@ resolution, variant, localize — and `houdini/.../build.py` is a function that
 takes an asset and a dict of those choices and makes nodes. No dialogs on the
 Houdini side, no `hou` on the library side.
 
+`build.karma_component()` stays the only entry point and dispatches on type: an
+HDRI becomes a dome light, a texture set a material in a material library,
+everything else a component. Dispatching there, rather than in the dialog, is
+what lets the panel and the shelf's `request.json` both get it without either
+knowing.
+
+**Which material library** is the one place the builder reads Houdini's state
+rather than an option: the selected `materiallibrary` LOP, or the one the
+network editor sits in, else a new one. That is not the DCC guessing about the
+library — it is the library not guessing about the scene. The dialog cannot
+know what is selected in a Houdini that may be another process, and the shelf
+route resolves it when the button is pressed. **One shader builder**:
+`_build_karma_mtlx()` serves the mesh and the texture set alike.
+
 The builder was ported from a working shelf tool whose other half walked the
 folder and re-derived what every filename meant, on every run. That half was
 deleted rather than moved, which is the payoff stated in §1 finally collected:
 1 058 lines of Karma/MaterialX/Solaris knowledge kept, ~1 000 lines of guessing
 dropped because `asset.json` already holds the answers.
 
-Two ways in, one entry point. Inside a Python Panel the window has `hou` and
+Three ways in, one entry point. Inside a Python Panel the window has `hou` and
 calls the builder directly; standalone it writes `.assetlib/request.json` and a
 shelf button reads it. Disk is what both sides agree on, the same rule the rest
 of the project runs on.
+
+The third (2026-10-14) is a tile **dropped on a network editor**, from either
+window. The drag carries only JSON naming package folders; everything after it
+runs in Houdini (`assetlib_hou/drop.py`), so it is the first way with a
+position attached. It still goes through `ui.import_houdini.ask_and_send()` —
+the same options window and the same loop as right-click — so the rule above
+holds: the drop decides *where*, never *what*. The position travels as
+`opts["drop"]` and is applied by `build._place()` only in the network that was
+dropped on.
 
 **RULE.** The panel READS and BUILDS. Add, Edit and deep verify stay in the
 standalone app, because Houdini's interpreter has no xxhash and importing from

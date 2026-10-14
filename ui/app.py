@@ -29,6 +29,7 @@ from assetlib import upgrade
 from assetlib.edit import delete_asset
 from assetlib.verify import verify
 
+from . import netpool
 from . import theme
 from . import thumbcache
 
@@ -90,11 +91,19 @@ class MainWindow(QMainWindow):
             "Switch off to see only what you actually hold.")
         self.cloud_btn.toggled.connect(self._toggle_cloud)
 
+        self.details_btn = QPushButton("Details")
+        self.details_btn.setCheckable(True)
+        self.details_btn.setToolTip(
+            "Open every tile: resolutions held, maps, variants, LODs, size.\n"
+            "'?' means not indexed yet (F5), '—' means none.   Ctrl+D")
+        self.details_btn.toggled.connect(self._toggle_details)
+
         top = QHBoxLayout()
         top.addWidget(self.add_btn)
         top.addWidget(self.batch_btn)
         top.addWidget(self.search, 1)
         top.addWidget(self.cloud_btn)
+        top.addWidget(self.details_btn)
         top.addWidget(QLabel("size"))
         top.addWidget(self.zoom)
 
@@ -113,7 +122,8 @@ class MainWindow(QMainWindow):
         self.view.setMovement(QListView.Static)
         self.view.setWordWrap(True)
         self.view.setSpacing(8)
-        self.view.setItemDelegate(TileDelegate(self.view, self))
+        self.delegate = TileDelegate(self.view, self)
+        self.view.setItemDelegate(self.delegate)
         self.view.setMouseTracking(True)   # so the delegate sees MouseOver
         # Extended so a whole shelf of assets can go to Houdini in one pass.
         # Everything else - Contents, Edit, Delete, Open folder - still acts on
@@ -121,6 +131,11 @@ class MainWindow(QMainWindow):
         # to touch, so a wide selection cannot make one of them do more than it
         # says.
         self.view.setSelectionMode(QListView.ExtendedSelection)
+        # Drag OUT only - tiles onto Houdini's network editor. The grid accepts
+        # nothing: an asset enters the library through Add, never by a drop.
+        self.view.setDragEnabled(True)
+        self.view.setDragDropMode(QListView.DragOnly)
+        self.view.setDefaultDropAction(Qt.CopyAction)
         self.view.doubleClicked.connect(lambda *_: self._open_selected())
         self.view.selectionModel().selectionChanged.connect(self._update_detail)
         self.view.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -175,6 +190,10 @@ class MainWindow(QMainWindow):
         rescan.setShortcut("F5")
         rescan.triggered.connect(self._rebuild)
         self.addAction(rescan)
+        details = QAction("Tile details", self)
+        details.setShortcut("Ctrl+D")
+        details.triggered.connect(self.details_btn.toggle)
+        self.addAction(details)
 
         # The library menu carries what used to be CLI subcommands. verify is
         # the only way to learn that the library has drifted, so it must stay
@@ -446,8 +465,30 @@ class MainWindow(QMainWindow):
         # refresh - after that the normal count takes the bar back.
         note = upgrade.describe(self._upgrade)
         self._upgrade = None
+        if self.details_btn.isChecked():
+            stale = self._details_note(rows)
+            if stale:
+                message += f"   ·   {stale}"
         self.statusBar().showMessage(f"{message}   ·   {note}" if note else message)
         self._update_detail()
+
+    def _toggle_details(self, on: bool) -> None:
+        # delegate flag and grid size together, see TileDelegate.__init__.
+        self.delegate.detailed = on
+        self._apply_zoom()
+        self.view.viewport().update()
+        note = self._details_note(self.model.rows) if on else ""
+        if note:
+            self.statusBar().showMessage(note)
+
+    @staticmethod
+    def _details_note(rows) -> str:
+        """How many tiles show '?' that F5 would fill. Server tiles excluded:
+        F5 cannot fill those, only the server re-indexing with this build."""
+        stale = sum(1 for r in rows
+                    if r.get("slots") is None and not gridmodel.is_cloud(r))
+        return (f"{stale} asset(s) indexed before tile details existed - "
+                f"F5 fills them in") if stale else ""
 
     def _rebuild(self) -> None:
         """F5. Also migrates: it is already reading every asset.json, so the
@@ -1041,6 +1082,10 @@ class MainWindow(QMainWindow):
         tdef = self.cfg.type_by_id.get(row.get("type"), {})
         return tdef.get("ingest") == "mesh_plus_textures"
 
+    def _houdini_buildable(self, row) -> bool:
+        """mesh -> component, HDRI -> dome light, texture set -> material."""
+        return self._has_geometry(row) or row.get("type") in ("hdri", "texture")
+
     def _import_houdini(self) -> None:
         """Ask what to build, then build it - or leave a request for the shelf.
 
@@ -1049,12 +1094,12 @@ class MainWindow(QMainWindow):
         """
         from assetlib.model import Asset
 
-        from .import_houdini import HoudiniImportDialog, send
+        from .import_houdini import ask_and_send
 
-        # Only the ones that hold a mesh. A selection dragged across a shelf
-        # picks up HDRIs and texture sets, and silently skipping them is kinder
-        # than refusing the whole thing.
-        rows = [r for r in self._selected_rows() if self._has_geometry(r)]
+        # Only the ones Houdini can build - meshes, HDRIs and texture sets. A
+        # selection dragged across a shelf picks up IES profiles and scripts,
+        # and silently skipping them is kinder than refusing the whole thing.
+        rows = [r for r in self._selected_rows() if self._houdini_buildable(r)]
         if not rows:
             return
 
@@ -1087,24 +1132,10 @@ class MainWindow(QMainWindow):
                     "downloaded yet. Import them first.")
             return
 
-        # The dialog is built from the FIRST asset and its answers are applied
-        # to all of them. That is a real hazard when the selection is mixed -
-        # see the note in ROADMAP.md - so the dialog says so rather than
-        # pretending the options describe every asset.
-        dialog = HoudiniImportDialog(assets[0][0], self.cfg, self,
-                                     count=len(assets))
-        if dialog.exec() != QDialog.Accepted:
+        result = ask_and_send(assets, self.cfg, self)
+        if result is None:
             return
-
-        opts = dialog.options()
-        built, failed = 0, []
-        for asset, path in assets:
-            try:
-                send(asset, path, self.cfg, opts)
-                built += 1
-            except Exception as exc:                    # noqa: BLE001
-                failed.append(f"{asset.name}: {exc}")
-
+        built, failed = result
         if failed:
             QMessageBox.warning(
                 self, "Some assets did not build",
@@ -1150,7 +1181,7 @@ class MainWindow(QMainWindow):
             menu.addSeparator()
         menu.addAction("Contents…", self._view_asset)
         menu.addAction("Edit…", self._edit_asset)
-        with_geo = [r for r in self._selected_rows() if self._has_geometry(r)]
+        with_geo = [r for r in self._selected_rows() if self._houdini_buildable(r)]
         if with_geo:
             menu.addSeparator()
             label = ("Import to Houdini…" if len(with_geo) == 1
@@ -1309,8 +1340,10 @@ class MainWindow(QMainWindow):
         # Sizes come from gridmodel, where the tile is drawn - two places
         # deciding the same geometry is how the text block ended up too short
         # for the names it had to hold.
+        # Details raises the size inside tile_sizes() and leaves the slider
+        # alone, so switching it off returns to the zoom that was chosen.
         px = ZOOM_SIZES[self.zoom.value()]
-        icon, grid = tile_sizes(px)
+        icon, grid = tile_sizes(px, self.delegate.detailed)
         self.view.setIconSize(icon)
         self.view.setGridSize(grid)
 

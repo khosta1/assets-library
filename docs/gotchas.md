@@ -419,3 +419,38 @@ commit that added the field, by a process started before it — so `analyse.py`
 was still the old module in memory and the field was never written. Restart
 after touching `assetlib/`, not only after touching the UI.
 
+
+---
+
+**22. A drop on Houdini's network editor: four facts, none of them written
+down** — 2026-10-14
+
+Building drag-a-tile-into-Houdini took three probe runs, because every
+documented route was the wrong one or the wrong version.
+
+- **The forum route is the wrong one.** `scripts/externaldragdrop.py` →
+  `dropAccept(file_list)` is what a search finds. It fires for files from
+  another process only, gets no position, and when it returns `False` Houdini
+  carries on with its own file drop — which opened a dragged `asset.json` as a
+  **scene** and showed an error. The network editor has its own script:
+  `scripts/nodegraph/dragdrop.py`, `dropTest` / `dropGetChoices` /
+  `dropAccept(pane, source, position, token)`. Both the standalone window and
+  the panel reach it, and claiming the drag in `dropTest` (`(True, False)`) is
+  what stops the scene-file error.
+- **21 and 22 differ.** 22.0.368 added a registry, `nodegraphdrop`, and its
+  `dragdrop.py` only delegates to it. 21.0.512 has no registry and its
+  `dragdrop.py` is a stub. Felix works in **21**: two probe runs aimed at 22
+  (`python3.13libs`, the registry) loaded nothing at all, while the log looked
+  like the drop simply had not arrived. **Check which Houdini is running —
+  `Get-Process houdini | Select Path` — before believing a silent log.**
+- **Only JSON comes through.** `source.data("application/json")` yields the
+  payload as one string. `text/uri-list` and a custom MIME type both report
+  `hasData() == True` and then yield nothing.
+- **`position` is screen pixels** — `(2886, 623)`. `pane.cursorPosition()` is
+  the same point in network coordinates and is what nodes are placed by.
+
+**RULE.** Our `scripts/nodegraph/dragdrop.py` REPLACES SideFX's — Houdini uses
+the first on the path. Harmless in 21; in 22 it must hand every drag that is
+not ours to `nodegraphdrop` exactly as theirs does, or every other package's
+drop handlers go dark. Diff it against `$HFS/houdini/scripts/nodegraph/dragdrop.py`
+on every Houdini update.

@@ -153,7 +153,7 @@ def run_when_baked(asset, asset_dir: Path, opts: dict, build_fn,
     what happened must handle both - see `import_houdini.send()`.
     """
     opts = opts or {}
-    rels = list(_texture_rels(asset, opts).values())
+    rels = _bake_rels(asset, opts)
 
     wanted = (opts.get("derived", True) and opts.get("bake", True)
               and derived.available(fmt))
@@ -223,8 +223,8 @@ def run_when_baked(asset, asset_dir: Path, opts: dict, build_fn,
     return None
 
 
-def _texture_rels(asset, opts):
+def _bake_rels(asset, opts):
     """Lazy, because build.py imports this module."""
     from . import build
 
-    return build.texture_rels(asset, opts)
+    return build.bake_rels(asset, opts)

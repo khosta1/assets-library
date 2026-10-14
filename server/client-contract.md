@@ -51,6 +51,13 @@ Base `http://10.209.73.177:8083`, every request carrying
 
 `files[]` excludes `derived/` — it is regenerable and never transferred.
 
+A catalogue row's fields are `catalog.ROW_FIELDS`. `slots`, `variants` and
+`lods` (2026-10-14, the tile's Details rows) are **optional**: a server that
+does not send them yet is read as NULL and the tile shows `?`. The box sends
+them once it runs an `assetlib/index.py` that has the columns **and** has
+re-indexed — `server/api.py` names them in its SELECT, so the two files ship
+together or every catalogue request fails.
+
 ---
 
 ## The three tiers

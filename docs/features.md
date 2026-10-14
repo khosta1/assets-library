@@ -103,8 +103,8 @@ committed.
   so the box rebuilds its catalogue after a push and a missing NOPASSWD rule
   fails in a legible second instead of waiting on a password prompt nobody can
   answer.
-- **Cloud tiles** — blue ground and outline for assets that are on a server and
-  not on this disk, and a `☁ Cloud` toggle that hides them. `cache` is not
+- **Cloud tiles** — blue name panel and outline for assets that are on a server
+  and not on this disk, and a `☁ Cloud` toggle that hides them. `cache` is not
   marked: it is here.
 - **First-run setup panel** — `ui/first_run.py`. A copy with no assets and no
   usable server shows it once: where assets live, server address + token,
@@ -130,13 +130,36 @@ committed.
   from the measured pixel width (`16k`), re-emitted as `_<res>` before the
   UDIM tile; biggest promoted into `textures[slot]` by
   `commit._promote_best_resolution()`. `res:4k` asks *has this size*.
-- **Grid tiles sized to their content** — `gridmodel.TileDelegate` and
-  `tile_sizes()`: 16:9 tile, image bottom-aligned, name in a fixed two-line
-  block with middle elision. One aspect for the whole view, because
-  `setUniformItemSizes(True)` needs it (gotcha 12).
+- **Grid tiles are cards** (2026-10-14, compileall only — not yet run) —
+  `gridmodel.TileDelegate` and `tile_sizes()`: one rounded outline round a
+  16:9 image well and a name panel, so a name cannot be read as its
+  neighbour's. Image fitted into the well, never cropped. Name in the app font
+  as before (monospace tried and refused), fixed two lines, middle elision. Biggest resolution as a badge on the image from
+  160px. Selection fills the name panel, never the image. One aspect for the
+  whole view, because `setUniformItemSizes(True)` needs it (gotcha 12).
+- **Tile details** (2026-10-14, compileall only — not yet run) — `Details`
+  button / Ctrl+D opens every card at once: type / category, a state chip
+  (`server only`, `this disk only`, `downloaded`), then fixed rows RES (pills,
+  biggest filled), MAPS, VARIANTS, LODS, SIZE. `?` = not indexed yet, `—` =
+  none. Raises the zoom to 200px and hands the slider's value back when off.
+  Reads three index columns — `slots`, `variants`, `lods` — never `asset.json`.
+- **Drag tiles onto Houdini's network editor** (2026-10-14; the route is
+  probed in Houdini 21 from both windows, the build-at-cursor is compileall
+  only) — `ui/gridmodel.mimeData()` → `houdini/scripts/nodegraph/dragdrop.py`
+  → `assetlib_hou/drop.py` → `ui.import_houdini.ask_and_send()` → nodes centred
+  on the drop point. Houdini 21 and 22. Server-only tiles do not drag.
 - **Multi-select import to Houdini** — select a shelf of assets, one
   options dialog, all built. Options are read from the FIRST asset; the
-  dialog says so. Non-mesh assets are skipped.
+  dialog says so. Assets that are not a mesh, an HDRI or a texture set are
+  skipped.
+- **Texture set → MaterialX material** — added 2026-10-14, *built, not yet
+  observed in Houdini*. Right-click a texture set → Import to Houdini makes a
+  Karma MaterialX material (`MAT_<name>`, the same `_build_karma_mtlx()` a
+  mesh gets) inside the selected `materiallibrary` LOP — or the one the
+  network editor sits in. Neither: a new `assetlib_matlib` in `/stage`,
+  unwired, and selected so the rest of a batch lands in it too. A re-import
+  builds `MAT_<name>_1` beside the old one, never over it. No stencil option
+  without a mesh in the selection: the opacity map goes into the shader.
 - **`fetch_polyhaven.py`** — added 2026-10-14. Fetches one Poly Haven texture
   category into `_inbox/polyhaven/`, serial, md5-checked, resumable. A
   fetcher, not a front-end (`decisions.md`, Reversed). Its logic ran for
@@ -146,6 +169,13 @@ committed.
   `groups` in `categories.json` nests categories under a heading in the
   sidebar (`texture ▸ ground_and_terrain ▸ dirt, sand, …`); the group node
   searches `cat:a,b,…`, which `index.search` now accepts. Never a folder.
+- **HDRI → dome light** — added 2026-10-09, *built, not yet observed in
+  Houdini*. Right-click an HDRI → Import to Houdini makes a `domelight` LOP
+  with the image loaded. Localize to `$HIP` ticked by default (HDRIs only),
+  copies only the image the dome reads, and is refused on an unsaved scene.
+  The image is baked once into the library's `derived/`, then copied - never
+  handed to Karma as the source, which is what wrote a 276 MB `.exr.rat`
+  beside `tcom_norwayforest_hdri_sphere.exr`.
 - **Batch import** — `ui/batch_add.py`, button beside *Add asset* or
   Ctrl+Shift+N. One row per subfolder, shift-select, and a change to Type,
   Category or the checkbox spreads across the selection. Name never

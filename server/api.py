@@ -228,9 +228,13 @@ def catalog():
     # "on my disk" - shipping it would tell a client its remote assets are
     # already local, which is the one lie that would make it skip downloading
     # them. Never widen this to SELECT *.
+    #
+    # slots/variants/lods exist only once the box runs an assetlib/index.py
+    # that ALTERs them in - ship the two together, or this SELECT fails on
+    # every catalogue request.
     rows = [dict(r) for r in db().execute(
         "SELECT uuid, name, type, category, path, size, resolution, "
-        "resolutions, has_geo, tags, created FROM assets "
+        "resolutions, has_geo, tags, created, slots, variants, lods FROM assets "
         "ORDER BY type, category, name"
     )]
     payload = json.dumps(
