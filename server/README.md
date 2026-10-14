@@ -90,7 +90,10 @@ p.write_text(json.dumps(d, indent=2) + "
 print(d["marc"])                           # hand THIS to that one person
 PY
 
-# revoke one - delete the line, same no-restart rule
+# revoke one - delete the LINE, never the file. `rm tokens.json` revokes nobody:
+# the server keeps the last table it read, because a safe edit is
+# write-temp-then-rename and a stat in that window would otherwise log everyone
+# out mid-edit. Same no-restart rule.
 sudo python3 -c "import json,pathlib; p=pathlib.Path('/etc/assetlib/tokens.json'); d=json.loads(p.read_text()); d.pop('marc',None); p.write_text(json.dumps(d,indent=2)+chr(10))"
 
 # who pulled what

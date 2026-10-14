@@ -26,6 +26,7 @@ import dataclasses
 import gzip
 import hmac
 import json
+import logging
 import os
 import sqlite3
 import threading
@@ -93,8 +94,15 @@ def _load_tokens() -> dict:
         st = TOKENS_FILE.stat()
         stamp = (st.st_mtime_ns, st.st_size)
     except OSError:
-        # Deleted or never created: the env token is the whole gate. Not an
-        # error - it is how the service ran for its first month.
+        # NEVER created: the env token is the whole gate, which is how the
+        # service ran for its first month. Not an error.
+        #
+        # VANISHED after having been read: the table is KEPT, deliberately. A
+        # safe edit of this file is write-a-temp-then-rename, and a stat landing
+        # in that window sees nothing - so emptying the table here would log
+        # every reader out at random moments during an ordinary edit. The cost
+        # of keeping it is that `rm tokens.json` does NOT revoke anybody; the
+        # supported way to revoke is to EDIT the file, and the README says so.
         return _tokens if _tokens_stamp else {}
 
     if stamp == _tokens_stamp:
@@ -122,6 +130,15 @@ def _load_tokens() -> dict:
         return _tokens
 
 app = Flask(__name__)
+
+# Without this the audit trail does not exist. Flask's own docs: "If logging is
+# unconfigured, messages below Python's default level ('warning') will not
+# appear" - and nothing here configures logging, so the 401 warnings would show
+# while `tokens.json reloaded` and `file ... <- label` would not. Which is the
+# worst of the three possible states: believing there is a record of who pulled
+# what, and having none. The handler Flask attaches writes to the WSGI error
+# stream, which under gunicorn is stderr, which is journald.
+app.logger.setLevel(logging.INFO)
 
 
 # ----------------------------------------------------------------------- auth
