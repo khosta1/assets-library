@@ -28,6 +28,7 @@ import hmac
 import json
 import os
 import sqlite3
+import threading
 from pathlib import Path
 
 from flask import Flask, Response, abort, g, jsonify, request, send_file
@@ -45,17 +46,80 @@ SKIP_TOP = {"derived"}
 
 CFG = load_config()
 
+# The shared token every client has used since the service existed. Kept, and
+# kept first, because changing how many secrets the server accepts must not
+# invalidate the ones already typed into twenty-five copies of the app.
 TOKEN = os.environ.get("ASSETLIB_TOKEN", "")
-if not TOKEN:
+
+# Per-reader secrets: {"label": "secret"}. A FILE and not an environment
+# variable, because adding or revoking a reader has to be an edit someone makes
+# at 1am without touching a systemd unit or restarting a service that may have
+# a 900 MB download in flight.
+TOKENS_FILE = Path(os.environ.get("ASSETLIB_TOKENS_FILE", "/etc/assetlib/tokens.json"))
+
+if not TOKEN and not TOKENS_FILE.is_file():
     # Fail closed. The panel next door deliberately has no login because the
     # worst a stranger on the mesh can do there is restart a game server; here
     # the worst is reading fifteen years of work, and the friends are on that
     # same mesh. Starting unauthenticated "just this once" is how that becomes
     # permanent.
     raise SystemExit(
-        "ASSETLIB_TOKEN is empty - refusing to serve the library "
-        "unauthenticated. Set it in /etc/assetlib/api.env."
+        "no ASSETLIB_TOKEN and no %s - refusing to serve the library "
+        "unauthenticated. Set one in /etc/assetlib/." % TOKENS_FILE
     )
+
+_tokens: dict = {}                      # label -> secret, the file's contents
+_tokens_stamp: tuple = ()               # (mtime, size) of the file last read
+_tokens_lock = threading.Lock()
+
+
+def _load_tokens() -> dict:
+    """The per-reader table, re-read when the file on disk changes.
+
+    Re-read rather than loaded once, so revoking somebody takes effect without
+    a restart - and a restart is not free here: `--timeout 3600` exists because
+    a client may be forty minutes into a 1 GB asset, and dropping that to
+    remove one reader punishes everyone else for their presence.
+
+    A file that will not parse keeps the PREVIOUS table rather than emptying
+    it. Both directions are wrong in some way: keeping it means a revocation
+    typed with a trailing comma silently does not happen, emptying it means one
+    typo locks out every reader at once. The second is worse and happens more
+    often, and the admin always has ASSETLIB_TOKEN regardless.
+    """
+    global _tokens, _tokens_stamp
+
+    try:
+        st = TOKENS_FILE.stat()
+        stamp = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        # Deleted or never created: the env token is the whole gate. Not an
+        # error - it is how the service ran for its first month.
+        return _tokens if _tokens_stamp else {}
+
+    if stamp == _tokens_stamp:
+        return _tokens
+
+    with _tokens_lock:
+        if stamp == _tokens_stamp:                  # another thread won
+            return _tokens
+        try:
+            with TOKENS_FILE.open(encoding="utf-8") as fh:
+                raw = json.load(fh)
+            fresh = {str(k): str(v) for k, v in raw.items()
+                     if isinstance(raw, dict) and str(v)}
+        except (OSError, ValueError, AttributeError) as exc:
+            app.logger.error("%s is unreadable, keeping the previous %d "
+                             "token(s): %s", TOKENS_FILE, len(_tokens), exc)
+            _tokens_stamp = stamp                   # do not retry every request
+            return _tokens
+        # Rebound, never mutated in place: a dict swap is atomic under the GIL,
+        # so a request reading it mid-reload sees the old table or the new one
+        # and never a half-written one.
+        _tokens = fresh
+        _tokens_stamp = stamp
+        app.logger.info("%s reloaded: %d reader token(s)", TOKENS_FILE, len(fresh))
+        return _tokens
 
 app = Flask(__name__)
 
@@ -65,13 +129,57 @@ app = Flask(__name__)
 
 @app.before_request
 def _require_token():
+    """One gate, several acceptable keys, and a name attached to whichever won.
+
+    The service ran for its first month on a single shared secret, which was
+    proportionate for twenty-five friends on a private mesh: everyone who could
+    reach the port was already someone Felix had added by hand. Behind a public
+    address that stops being true - one leak is anonymous access to everything,
+    nothing says who pulled what, and the only remedy is rotating the secret,
+    which logs out all of them at once to remove one. See
+    `docs/public-access.md`.
+    """
     header = request.headers.get("Authorization", "")
     sent = header[7:] if header.startswith("Bearer ") else ""
+
     # compare_digest, not ==. String equality returns on the first wrong byte,
     # which hands the token's length and prefix to anyone who can time a few
     # thousand requests. One import to avoid, unpleasant to retrofit.
-    if not hmac.compare_digest(sent, TOKEN):
+    #
+    # Every candidate is compared even after one matches. Stopping early would
+    # make the response time depend on WHICH token was sent, which is a slower
+    # version of the leak compare_digest exists to close - and the loop is over
+    # a handful of entries, not a database.
+    label = ""
+    if TOKEN and hmac.compare_digest(sent, TOKEN):
+        label = "shared"
+    for name, secret in _load_tokens().items():
+        if hmac.compare_digest(sent, secret):
+            label = name
+
+    if not label:
+        # Logged with the caller, because the first thing a public address buys
+        # is strangers: this line is how "someone is knocking" is told apart
+        # from "a reader has the wrong token pasted in".
+        app.logger.warning("401 %s %s from %s", request.method, request.path,
+                           request.headers.get("X-Forwarded-For")
+                           or request.remote_addr)
         abort(401)
+    g.reader = label
+
+
+@app.after_request
+def _audit(response):
+    """Log WHO took a file. Not every request - only the ones worth answering for.
+
+    gunicorn's access log already records every call, and a client polls the
+    catalogue on every launch, so logging a line per request here would bury
+    the one question this exists to answer: which reader pulled which asset.
+    Thumbnails and catalogue syncs are noise; a file transfer is not.
+    """
+    if request.path.startswith("/api/file/") and response.status_code < 400:
+        app.logger.info("file %s <- %s", request.path, getattr(g, "reader", "?"))
+    return response
 
 
 # -------------------------------------------------------------------- catalog

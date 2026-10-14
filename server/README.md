@@ -19,7 +19,8 @@ someone re-installs it.
 | venv | `/opt/assetlib/venv` — Flask + gunicorn, nothing else |
 | assets | `/srv/data2/assets/library/` — the 2 TB disk |
 | catalogue | `/var/lib/assetlib/index.db` — **the SSD**, never the NTFS mount |
-| token | `/etc/assetlib/api.env`, `0600 felix:felix` |
+| token | `/etc/assetlib/api.env`, `0600 felix:felix` — the shared one |
+| reader tokens | `/etc/assetlib/tokens.json`, `0600 felix:felix` — one per person |
 
 The catalogue lives on the SSD because SQLite opens WAL, WAL needs a
 shared-memory mapping, and ntfs-3g is FUSE. Filebrowser's BoltDB already cost
@@ -68,6 +69,32 @@ printf 'ASSETLIB_BASE=/opt/assetlib\nASSETLIB_LIBRARY=/srv/data2/assets/library\
 sudo chown felix:felix /etc/assetlib/api.env                         # ⚠
 sudo chmod 600 /etc/assetlib/api.env                                 # ⚠
 sudo grep ASSETLIB_TOKEN /etc/assetlib/api.env       # copy this into the client ⚠
+
+# 4b. ONE TOKEN PER READER (optional on a private mesh, REQUIRED behind a public
+#     address - see docs/public-access.md). The shared token above keeps
+#     working either way, so nobody already connected is disturbed.
+echo '{}' | sudo tee /etc/assetlib/tokens.json >/dev/null              # ⚠
+sudo chown felix:felix /etc/assetlib/tokens.json                       # ⚠
+sudo chmod 600 /etc/assetlib/tokens.json                               # ⚠
+
+# add a reader - the file is re-read on change, so NO restart. A restart would
+# drop every download in flight, and --timeout 3600 exists because one of them
+# may be forty minutes into a 1 GB asset.
+sudo python3 - <<'PY'
+import json, secrets, pathlib
+p = pathlib.Path("/etc/assetlib/tokens.json")
+d = json.loads(p.read_text() or "{}")
+d["marc"] = secrets.token_hex(32)          # <- the label, and the label is the audit trail
+p.write_text(json.dumps(d, indent=2) + "
+")
+print(d["marc"])                           # hand THIS to that one person
+PY
+
+# revoke one - delete the line, same no-restart rule
+sudo python3 -c "import json,pathlib; p=pathlib.Path('/etc/assetlib/tokens.json'); d=json.loads(p.read_text()); d.pop('marc',None); p.write_text(json.dumps(d,indent=2)+chr(10))"
+
+# who pulled what
+journalctl -u assetlib-api | grep '^.*file /api/file/'
 
 # 5. units — from /opt/assetlib, where step 2 put them
 cd /opt/assetlib

@@ -71,6 +71,13 @@ committed.
   the person has edited is kept and the new one lands beside it as `.new`.
   Identity is the **commit sha** in `.assetlib/update.json`, because
   `__version__` has read `0.1.0` for 53 commits. *Never run.*
+- **One token per reader, revocable without a restart** — `server/api.py`
+  (2026-10-14). `/etc/assetlib/tokens.json` maps a label to a secret and is
+  re-read when it changes, so removing one person does not drop every download
+  in flight. `ASSETLIB_TOKEN` still works and still comes first, so the 25
+  existing clients were not disturbed. A 401 logs who knocked; a file transfer
+  logs who took it. Required before the library is reachable from a public
+  address — `docs/public-access.md`. *Never run.*
 - **Remote catalogue** — `assetlib/remote.py` + `catalog.py`. Library ▸ *Remote
   libraries…* declares a server; **Shift+F5** syncs `/api/catalog` into
   `.assetlib/remote/<host>.db`, ETag-diffed. Search runs local ∪ remote

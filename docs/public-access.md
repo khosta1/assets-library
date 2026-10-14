@@ -122,10 +122,10 @@ proxy defaults have not been checked against a transfer that long.
 
 ---
 
-## 3. The one code change: per-person tokens
+## 3. The one code change: per-person tokens — **built 2026-10-14, never run**
 
-This is the only part that is code in this repository, and it is **required**,
-not optional, before a public URL exists.
+The only part that is code in this repository, and **required** rather than
+optional before a public URL exists.
 
 **Today** `server/api.py` holds one secret:
 
@@ -141,20 +141,36 @@ the real hole: **one leak is anonymous access to everything**, you cannot tell
 who pulled what, and the only remedy — rotating the secret — logs out all fifty
 people at once.
 
-**The change, precisely:**
+**What was built:**
 
 - `/etc/assetlib/tokens.json`, `0600 felix:felix`, beside `api.env`:
   `{"label": "secret", ...}`. A file rather than an env var because adding or
-  revoking a reader must not mean editing a unit's environment.
-- `server/api.py`: load that file, keep `ASSETLIB_TOKEN` as a fallback **so the
-  existing 25 clients keep working unchanged**. Re-read on mtime change, so
-  revoking somebody does not need a restart that drops every download in
-  flight.
-- `_require_token()`: `compare_digest` against each candidate and stash the
-  matching label on `g`. Comparing N times is still constant-time per
-  comparison; the only thing timing leaks is how many tokens exist, which is
-  not a secret.
-- log the label with the request, so `--access-logfile` answers *who*.
+  revoking a reader must not mean editing a unit's environment — the recipes
+  are in `server/README.md` step 4b.
+- `server/api.py` re-reads it when its mtime or size changes, so **revoking
+  somebody needs no restart**. A restart is not free: `--timeout 3600` exists
+  because a reader may be forty minutes into a 1 GB asset, and dropping that to
+  remove one person punishes everyone else for their presence.
+- **`ASSETLIB_TOKEN` is kept, and kept first**, so the existing 25 clients are
+  not disturbed by any of this. The service now fails closed only when there is
+  neither a shared token nor a token file.
+- `_require_token()` compares every candidate **even after one matches** —
+  stopping early would make the response time depend on *which* token was sent,
+  a slower version of the leak `compare_digest` exists to close. The winning
+  label lands on `g.reader`.
+- A 401 is logged with the caller's address, because the first thing a public
+  address buys is strangers, and *"someone is knocking"* has to be
+  distinguishable from *"a reader pasted the wrong token"*.
+- `after_request` logs **file transfers only**. gunicorn already logs every
+  call and a client polls the catalogue on each launch, so a line per request
+  would bury the one question this exists to answer: which reader pulled which
+  asset.
+
+**A broken `tokens.json` keeps the previous table** rather than emptying it.
+Both directions are wrong somehow — keeping it means a revocation typed with a
+trailing comma silently does not happen, emptying it means one typo locks out
+every reader at once. The second is worse and happens more often, and the admin
+still holds `ASSETLIB_TOKEN` regardless.
 
 **`server/client-contract.md` does not change.** It still says
 `Authorization: Bearer <token>`; what changes is how many values the server

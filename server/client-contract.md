@@ -41,6 +41,13 @@ being the same asset.
 Base `http://10.209.73.177:8083`, every request carrying
 `Authorization: Bearer <token>`. Everything is `GET`; errors are JSON.
 
+**Unchanged for clients since 2026-10-14**, when the server began accepting one
+token per reader instead of a single shared one: what changed is how many
+values it will accept, never the header. A client holds exactly one token and
+cannot tell which kind it has. The base may also be an `https://` address on a
+public domain — `url` is a free text field and the bundled runtime verifies
+certificates — and nothing else about the contract differs.
+
 | route | returns |
 |---|---|
 | `/api/health` | `assets`, `indexed_at`, `free_bytes` |
