@@ -81,7 +81,11 @@ committed.
   reader added through the panel, used, then revoked — **access ended
   instantly, with no restart**, which is the mtime reload working and the hard
   half of the feature. Shipped marked *never run*; nothing about it is unrun
-  now.
+  now. **`ASSETLIB_TOKEN` stays live by decision** (`decisions.md`,
+  2026-10-14): retiring it would disconnect 25 people to fix a problem none of
+  them has. The migration that needs no flag day is to hand each of them a
+  named token the next time you speak to them anyway, and drop the shared one
+  when the audit log stops printing `shared`.
 - **Remote catalogue** — `assetlib/remote.py` + `catalog.py`. Library ▸ *Remote
   libraries…* declares a server; **Shift+F5** syncs `/api/catalog` into
   `.assetlib/remote/<host>.db`, ETag-diffed. Search runs local ∪ remote
