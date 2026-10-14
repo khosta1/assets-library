@@ -74,7 +74,9 @@ change the plan and two block it outright. **Facts, not decisions.**
   PC. The collision is almost certainly why the Livebox minted a `-1`. **No
   shell can resolve this**: the Livebox UI has to be opened and the MAC behind
   `braucoly-1` read. `70:85:c2:46:aa:9f` is the box; anything else is not.
-- **CGNAT is confirmed absent** — `90.105.205.11`, not `100.64/10`. The server
+- **CGNAT is confirmed absent** — the WAN address is a routable Orange one, not
+  `100.64/10` (the literal was here and is redacted: it is a home IP and this
+  repository is public). The server
   panel's own gotcha 2 says the opposite, from a `tcpdump` taken before the
   Livebox was swapped on 2026-09-12. **That gotcha is stale** and is the reason
   ZeroTier and the Funnel exist at all.
@@ -382,3 +384,36 @@ Open, and the halves belong to different sides:
   is a hang and not a drop, and looping on it would hide a real fault.
 - **box** — raise `--timeout`, but not to `0`: a genuinely hung worker should
   still be reaped.
+
+---
+
+## What was exposed, and when
+
+Recorded here because this is the file someone will open in six months to find
+out exactly that.
+
+`khosta1/assets-library` is public, and the release `v2026.10.14` made it
+findable. Audited 2026-10-14 by both sides:
+
+| | |
+|---|---|
+| credentials in tracked files | **none.** No 64-hex literal anywhere; `hosts.json`, `api.env` and `tokens.json` are all untracked. **Nothing needed rotating** — the one outcome that would have been expensive. |
+| home public IPv4 | **was** in this file, one line. Redacted 2026-10-14. |
+| Funnel hostname | this file, and `server/reader` (fixed in `9da74cc` — now `ASSETLIB_PUBLIC_URL` from the environment with no default). |
+| the release archive | **does not carry the address.** Built without `--host-url`: no `hosts.json`, no hostname in `Start here.txt`. Verified by reading the published zip. |
+| LAN / ZeroTier / path literals | `192.168.1.13`, `10.209.73.177`, `/srv/data2` in several files. Low value to a stranger; left alone rather than churning the repo. |
+
+**A redaction is not an un-publication.** Git history keeps what `HEAD` loses,
+and the `v2026.10.14` tag points at a commit that still contains the IP. The
+only true removals are making the repository private or rewriting history and
+force-pushing — the second breaks every clone the release created. Nobody
+should be allowed to believe a tidy-up commit erased it.
+
+**The cheap mitigation nobody mentioned:** the address is a *dynamic* Orange
+one. A Livebox reconnect makes the published value stale, which does more than
+any amount of editing — and costs a reboot.
+
+**The lesson, since it is mine:** the exposure check ran once, at the first
+push, and was never repeated as the repository grew. This file did not exist
+then. A repository that becomes public does not stay audited.
+
