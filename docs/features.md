@@ -137,6 +137,10 @@ committed.
 - **Multi-select import to Houdini** — select a shelf of assets, one
   options dialog, all built. Options are read from the FIRST asset; the
   dialog says so. Non-mesh assets are skipped.
+- **Sidebar category groups** — added 2026-10-14, *built, not yet observed*.
+  `groups` in `categories.json` nests categories under a heading in the
+  sidebar (`texture ▸ ground_and_terrain ▸ dirt, sand, …`); the group node
+  searches `cat:a,b,…`, which `index.search` now accepts. Never a folder.
 - **Batch import** — `ui/batch_add.py`, button beside *Add asset* or
   Ctrl+Shift+N. One row per subfolder, shift-select, and a change to Type,
   Category or the checkbox spreads across the selection. Name never

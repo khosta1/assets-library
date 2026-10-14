@@ -310,6 +310,14 @@ class MainWindow(QMainWindow):
         open_types = {self.tree.topLevelItem(i).data(0, TYPE_ROLE)
                       for i in range(self.tree.topLevelItemCount())
                       if self.tree.topLevelItem(i).isExpanded()}
+        # group nodes: the ones holding children. Same survive-the-rebuild rule.
+        open_groups = set()
+        for i in range(self.tree.topLevelItemCount()):
+            top = self.tree.topLevelItem(i)
+            for j in range(top.childCount()):
+                child = top.child(j)
+                if child.childCount() and child.isExpanded():
+                    open_groups.add((top.data(0, TYPE_ROLE), child.data(0, CAT_ROLE)))
 
         self.tree.blockSignals(True)
         self.tree.clear()
@@ -334,19 +342,45 @@ class MainWindow(QMainWindow):
                 node.setForeground(0, theme.dim_colour())
             self.tree.addTopLevelItem(node)
 
+            # A group is a heading, never a folder: its node filters cat:a,b,...
+            # and sits where its first member would have been in the list.
+            groups = self.cfg.groups_for(tid)
+            group_of = {c: g for g, members in groups.items() for c in members}
+            placed = set()
             for cat in self.cfg.categories_for(tid):
-                cn = counts.get((tid, cat), 0)
-                leaf = QTreeWidgetItem([f"{cat}   {cn}" if cn else cat])
-                leaf.setData(0, TYPE_ROLE, tid)
-                leaf.setData(0, CAT_ROLE, cat)
-                if cn == 0:
-                    leaf.setForeground(0, theme.dim_colour())
-                node.addChild(leaf)
+                g = group_of.get(cat)
+                if g is None:
+                    node.addChild(self._cat_leaf(tid, cat, counts))
+                    continue
+                if g in placed:
+                    continue
+                placed.add(g)
+                members = groups[g]
+                gn = sum(counts.get((tid, c), 0) for c in members)
+                gnode = QTreeWidgetItem([f"{g}   {gn}" if gn else g])
+                gnode.setData(0, TYPE_ROLE, tid)
+                gnode.setData(0, CAT_ROLE, ",".join(members))
+                if gn == 0:
+                    gnode.setForeground(0, theme.dim_colour())
+                node.addChild(gnode)
+                for c in members:
+                    gnode.addChild(self._cat_leaf(tid, c, counts))
+                gnode.setExpanded((tid, ",".join(members)) in open_groups)
             # first build: open_types empty -> everything closed
             node.setExpanded(tid in open_types)
 
         self.tree.blockSignals(False)
         self.tree.setCurrentItem(root)
+
+    @staticmethod
+    def _cat_leaf(tid: str, cat: str, counts: dict) -> QTreeWidgetItem:
+        cn = counts.get((tid, cat), 0)
+        leaf = QTreeWidgetItem([f"{cat}   {cn}" if cn else cat])
+        leaf.setData(0, TYPE_ROLE, tid)
+        leaf.setData(0, CAT_ROLE, cat)
+        if cn == 0:
+            leaf.setForeground(0, theme.dim_colour())
+        return leaf
 
     # --------------------------------------------------------------- queries
 

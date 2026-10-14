@@ -147,8 +147,14 @@ and not the package root, because the root's names are reserved and a tool
 shipping its own `preview/` would collide with the package's (2026-09-13).
 
 Three levels above it, always: `{type}` from `types.json` (18), `{category}`
-from the closed vocabulary in `categories.json` (114). No deeper nesting, no
+from the closed vocabulary in `categories.json` (119). No deeper nesting, no
 per-type exceptions.
+
+A **group** in `categories.json` (`groups`, 2026-10-14) is a sidebar heading
+over several categories — `texture ▸ ground_and_terrain ▸ dirt, sand, …` —
+and never a folder. Its node filters `cat:dirt,sand,…`; on disk the asset is
+still `library/texture/sand/<asset>`. Asking for a fourth level is asking for
+a group.
 
 **Token order is load-bearing** (2026-09-12). The UDIM tile must remain the
 last dot-segment before the extension or `<UDIM>` stops being the spelling

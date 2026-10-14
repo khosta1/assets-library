@@ -210,7 +210,9 @@ def search(conn: sqlite3.Connection, text: str = "", limit: int = 5000) -> list:
         if key == "type":
             where.append("a.type = ?"); params.append(value)
         elif key == "cat":
-            where.append("a.category = ?"); params.append(value)
+            # cat:a,b - a sidebar group asks for all its categories at once
+            cats = [c for c in value.split(",") if c] or [value]
+            where.append(f"a.category IN ({','.join('?' * len(cats))})"); params.extend(cats)
         elif key == "res":
             # "has this resolution", not "is this resolution": an asset holding
             # 2k/4k/8k/16k answers res:4k as readily as res:16k. The blob is
@@ -226,7 +228,8 @@ def search(conn: sqlite3.Connection, text: str = "", limit: int = 5000) -> list:
         if key == "type":
             where.append("a.type <> ?"); params.append(value)
         elif key == "cat":
-            where.append("a.category <> ?"); params.append(value)
+            cats = [c for c in value.split(",") if c] or [value]
+            where.append(f"a.category NOT IN ({','.join('?' * len(cats))})"); params.extend(cats)
         else:
             where.append("a.tags NOT LIKE ?"); params.append(f"%{token}%")
 

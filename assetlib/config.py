@@ -50,6 +50,8 @@ class Config:
         self.derived_ext = {e.lower() for e in raw["types"].get("derived_ext", [])}
         self.categories = raw["categories"]["categories"]
         self.category_rules = raw["categories"].get("rules", {})
+        # sidebar headings only - never a folder (categories.json _groups)
+        self.category_groups = raw["categories"].get("groups", {})
         self.slots_cfg = raw["texture_slots"]
         self.apps = raw["apps"]["apps"]
 
@@ -140,6 +142,12 @@ class Config:
 
     def valid_category(self, type_id: str, category: str) -> bool:
         return category in self.categories_for(type_id)
+
+    def groups_for(self, type_id: str) -> dict:
+        """{group: [category, ...]} for the sidebar, members filtered to real ones."""
+        cats = set(self.categories_for(type_id))
+        return {g: [c for c in members if c in cats]
+                for g, members in self.category_groups.get(type_id, {}).items()}
 
     def db_path(self) -> Path:
         return self.state / "index.db"
