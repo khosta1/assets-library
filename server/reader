@@ -83,9 +83,15 @@ def main(argv: list) -> int:
         print(table[label])
         print(f"\n^ give that to {label}, privately. It is shown once.",
               file=sys.stderr)
-        print(f"  base URL: https://portail.tail8af70e.ts.net:10000",
-              file=sys.stderr)
-        print(f"  active immediately - no restart.", file=sys.stderr)
+        # The address comes from the environment and has NO default. It used to
+        # be this operator's own hostname, written into a tool that now ships in
+        # a public repository - which leaked the endpoint and, just as bad, told
+        # anybody else self-hosting this to send their readers to somebody
+        # else's server. A deployment detail does not belong in source.
+        public = os.environ.get("ASSETLIB_PUBLIC_URL", "")
+        if public:
+            print(f"  base URL: {public}", file=sys.stderr)
+        print("  active immediately - no restart.", file=sys.stderr)
         return 0
 
     if cmd == "revoke":
