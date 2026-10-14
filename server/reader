@@ -1,0 +1,109 @@
+#!/opt/assetlib/venv/bin/python
+"""Add, list and revoke the people who may read the library.
+
+    reader add marc        mint a token for marc, print it ONCE
+    reader list            who has access (labels only, never secrets)
+    reader revoke marc     cut marc off
+
+No root: /etc/assetlib/tokens.json is felix's file. No restart either - the
+server re-reads it when it changes, which matters because a restart drops every
+transfer in flight and a 12 GB scan takes over an hour.
+
+Exists because the alternative was pasting a heredoc from README.md every time,
+and a credential operation typed from memory at 1am is where the mistakes are.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import secrets
+import stat
+import sys
+from pathlib import Path
+
+TOKENS = Path(os.environ.get("ASSETLIB_TOKENS_FILE", "/etc/assetlib/tokens.json"))
+
+# The label is the audit trail - it is what turns `file ... <- shared` into
+# `file ... <- marc` in the log. So it has to survive being read six months
+# later, and it has to be greppable.
+LABEL = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,31}$")
+
+
+def load() -> dict:
+    try:
+        return json.loads(TOKENS.read_text(encoding="utf-8") or "{}")
+    except FileNotFoundError:
+        return {}
+    except ValueError as exc:
+        # Refuse rather than start from {}. Overwriting an unparseable file
+        # would silently revoke everyone in it, which is the one mistake this
+        # script must never make on the operator's behalf.
+        sys.exit(f"{TOKENS} is not valid JSON ({exc}).\n"
+                 "Fix it by hand - the server is still running on the last "
+                 "table it read, so nobody is locked out meanwhile.")
+
+
+def save(table: dict) -> None:
+    # Written in place, not temp-then-rename: /etc/assetlib is root-owned, so
+    # felix may rewrite the file but may not create a sibling to rename over
+    # it. The window is microseconds on a file of a few hundred bytes, and the
+    # server keeps its previous table if it ever reads a half-written one -
+    # the failure is covered rather than merely unlikely.
+    TOKENS.write_text(json.dumps(table, indent=2) + "\n", encoding="utf-8")
+    TOKENS.chmod(stat.S_IRUSR | stat.S_IWUSR)          # 600, every time
+
+
+def main(argv: list) -> int:
+    cmd = argv[1] if len(argv) > 1 else ""
+    label = argv[2] if len(argv) > 2 else ""
+    table = load()
+
+    if cmd == "list":
+        if not table:
+            print("no named readers yet - everyone is on the shared token")
+            return 0
+        for name in sorted(table):
+            print(name)
+        return 0
+
+    if cmd == "add":
+        if not LABEL.match(label):
+            return err("a label is 1-32 chars of a-z 0-9 _ . - and starts "
+                       "alphanumeric. Use the person's name.")
+        if label in table:
+            # Never silently re-mint. Overwriting would rotate that person's
+            # token without telling anyone, and they would simply stop working
+            # with no error that points here.
+            return err(f"{label} already has a token. "
+                       f"`reader revoke {label}` first if you mean to replace it.")
+        table[label] = secrets.token_hex(32)
+        save(table)
+        print(table[label])
+        print(f"\n^ give that to {label}, privately. It is shown once.",
+              file=sys.stderr)
+        print(f"  base URL: https://portail.tail8af70e.ts.net:10000",
+              file=sys.stderr)
+        print(f"  active immediately - no restart.", file=sys.stderr)
+        return 0
+
+    if cmd == "revoke":
+        if label not in table:
+            return err(f"no reader called {label}. `reader list` shows them.")
+        del table[label]
+        save(table)
+        print(f"{label} revoked. Active immediately - no restart.",
+              file=sys.stderr)
+        return 0
+
+    return err(__doc__.strip().split("\n\n")[1])
+
+
+def err(message: str) -> int:
+    print(message, file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))
