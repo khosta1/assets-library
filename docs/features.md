@@ -77,7 +77,11 @@ committed.
   in flight. `ASSETLIB_TOKEN` still works and still comes first, so the 25
   existing clients were not disturbed. A 401 logs who knocked; a file transfer
   logs who took it. Required before the library is reachable from a public
-  address — `docs/public-access.md`. *Never run.*
+  address — `docs/public-access.md`. **Proven in production 2026-10-14**: a
+  reader added through the panel, used, then revoked — **access ended
+  instantly, with no restart**, which is the mtime reload working and the hard
+  half of the feature. Shipped marked *never run*; nothing about it is unrun
+  now.
 - **Remote catalogue** — `assetlib/remote.py` + `catalog.py`. Library ▸ *Remote
   libraries…* declares a server; **Shift+F5** syncs `/api/catalog` into
   `.assetlib/remote/<host>.db`, ETag-diffed. Search runs local ∪ remote

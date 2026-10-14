@@ -134,11 +134,19 @@ because it is ordinary.
 **Next.** `E4`, and the size check before the retry loop. It is the only place
 where something already published is actively misleading.
 
-**And one thing ahead of all of it, which is Felix's and not code.** There are
-**zero named readers**. The shared token is live, twenty-five people hold it,
-and it now sits behind a public URL. Everything built today is deployed and
-unused, and `reader add <name>` is one command. No code item outranks that, and
-no code item can fix it.
+**And then closed, within the hour.** The box side's parting point was that
+there were **zero named readers** — everything deployed and unused. Felix added
+one through the panel, used it, and revoked it: **access ended instantly, no
+restart.** That is the mtime reload proven in production, which was the last
+unobserved part of `874f3f7` and the half the design actually turned on. The
+shared token is still live and still held by twenty-five people, so migrating
+them off `ASSETLIB_TOKEN` is the remaining move — it is what turns "who pulled
+this" from *shared* into a name.
+
+**Also avoided, and it fails silently:** a revoke is **deleting the line, never
+the file**. `rm tokens.json` revokes nobody — the `OSError` path keeps the last
+table on purpose, because a safe edit is write-temp-then-rename and a `stat`
+landing in that window would log every reader out mid-edit.
 
 ---
 
