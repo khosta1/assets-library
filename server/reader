@@ -61,6 +61,13 @@ def main(argv: list) -> int:
     table = load()
 
     if cmd == "list":
+        if "--json" in argv:
+            # For the server panel, which must not parse prose: the sentence
+            # below is tuned for a person reading a terminal, and the day
+            # somebody improves its wording is the day a parser breaks.
+            # Labels only - a secret has no business crossing this boundary.
+            print(json.dumps({"readers": sorted(table)}))
+            return 0
         if not table:
             print("no named readers yet - everyone is on the shared token")
             return 0
