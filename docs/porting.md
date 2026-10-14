@@ -175,8 +175,20 @@ The checklist that caught everything. Read the output in this order:
 
 8. **A combined map winning a real slot.** Poly Haven's `_rough_ao_` matches
    roughness before AO and wins the tie against `_rough_` on stem length — trap
-   3's mechanism again. Dropped at download (`docs/polyhaven.md`) rather than
-   given a rule, by trap 5's reasoning: one vendor so far.
+   3's mechanism again. `_rough_diff_` (`rocks_ground_05`) did the same. Both
+   dropped at download (`docs/polyhaven.md`) rather than given a rule, by trap
+   5's reasoning: one vendor so far. The plan says it plainly —
+   `roughness: 2 different maps matched this slot - kept '…_rough_diff'`.
+   **Grep the plan's warnings for `matched this slot` before looping.**
+
+9. **A keyword that can never fire.** Poly Haven's older sets name the base
+   colour `_col_` and the height `_height_`. The resolution token is stripped
+   before matching, so `rocks_ground_02_col_1k` is matched as
+   `rocks_ground_02_col`, and the `_col_` keyword — which needs the trailing
+   underscore — never matched: two assets planned with no diffuse, their colour
+   in `extra/`. `_col` added beside `_col_`, as `_diff` sits beside `_diff_`
+   (gotcha 2's shape). **Check every asset of a texture batch has a diffuse.**
+   2026-10-14.
 
 ---
 

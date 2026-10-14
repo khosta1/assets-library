@@ -45,6 +45,9 @@ Map keys as `/files` names them, decided 2026-10-14:
 | `nor_dx` | **no** | the library stores OpenGL normals only; it would be rejected |
 | `arm` | **no** | packed AO/rough/metal; the unpacked maps are there and win anyway |
 | `rough_ao` | **no** | roughness × AO in one image, shipped beside both — see trap below |
+| `rough_diff` | **no** | a second roughness-derived map, same trap (`rocks_ground_05`) |
+| `col` `height` | yes | the older naming of base colour and displacement (`rocks_ground_02`, `snow_field_aerial`); `col` needed a keyword — porting trap 9 |
+| `sss` `mask` | yes | translucency on snow, opacity on grass |
 | `blend` `gltf` `mtlx` | **no** | sidecars naming the original files, which the import renames |
 
 - **Resolutions: 1k, 4k, 8k** (Felix). The library keeps several sizes per slot
@@ -169,6 +172,16 @@ cannot ship a new dependency.
    provenance.
 4. **Push to the server** is its own step, asked for by name. The box's config
    must have the new categories first, or its `verify` flags every asset.
+
+## The first run, 2026-10-14
+
+Ground & Terrain: **147 fetched (28 GB on the wire, 33 GB on disk), 147
+imported, 0 failed**, 32.6 GB kept in `library/texture/{8 categories}/`.
+Sampled first — one per category plus the aerial, spec + bump and `ref`
+sets — which found traps 8 (`rough_diff`) and 9 (`_col`) before the loop.
+Deep `verify`: **0 errors on the 147**; its only warnings on them were
+Karma's `.jpg.rat` beside three samples already rendered in Houdini (porting
+trap 6). `_inbox/polyhaven/` deleted after.
 
 ## Not fetched yet
 

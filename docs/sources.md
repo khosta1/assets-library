@@ -16,8 +16,10 @@ which is what `config/texture_slots.json` and `config/types.json` encode.
 The `_diff_` form is why gotcha 2 exists: it was missing from the diffuse
 keywords and basecolors fell through unmatched. Seen on the 2026-10-14 fetch:
 `_disp_`, `_spec_` and `_bump_` (the mud family), `_ref_` (no slot, goes to
-`extra/`), and `_rough_ao_` — roughness × AO in one image beside both, which
-wins the roughness slot on a tie and is therefore not fetched. Also ships
+`extra/`), and `_rough_ao_` / `_rough_diff_` — a second roughness-derived map
+beside the real one, which wins the roughness slot on a tie and is therefore
+not fetched. Older sets say `_col_` and `_height_` for base colour and
+displacement (porting trap 9); snow adds `_sss_`, grass an opacity map. Also ships
 `_nor_dx_` and a packed `_arm_`, neither fetched. Sizes 1k–8k on every
 texture, 16k on about a quarter. A public **API** with CC0 assets, real-world
 `dimensions` in mm and its own category tree — `docs/polyhaven.md`.

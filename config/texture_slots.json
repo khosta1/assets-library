@@ -189,7 +189,8 @@
     },
     {
       "key": "diffuse",
-      "keywords": ["diffuse", "_diff_", "_diff", "albedo", "_alb_", "basecolor", "base_color", "basecol", "_col_", "_color_", "_color", "color_", "_clr_", "color", "_d_", "_bc_"],
+      "keywords": ["diffuse", "_diff_", "_diff", "albedo", "_alb_", "basecolor", "base_color", "basecol", "_col_", "_col", "_color_", "_color", "color_", "_clr_", "color", "_d_", "_bc_"],
+      "_keywords_col": "2026-10-14: '_col' beside '_col_', as '_diff' sits beside '_diff_'. The resolution token is stripped before matching, so Poly Haven's older 'rocks_ground_02_col_1k.jpg' is matched as 'rocks_ground_02_col' - no trailing underscore - and '_col_' never fired: the base colour went to extra/ and the asset had no diffuse. Safe as a substring because diffuse is the LAST slot tried; '_col' only reaches files no other slot wanted.",
       "mtlx_input": "base_color",
       "dtype": "color3",
       "colorspace": "srgb_texture",

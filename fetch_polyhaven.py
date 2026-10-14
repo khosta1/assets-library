@@ -31,11 +31,11 @@ RES = ("1k", "4k", "8k")                 # Felix, 2026-10-14
 FORMATS = ("jpg", "png", "exr")          # first one present wins
 # nor_dx: library keeps OpenGL only, would be rejected. arm: unpacked maps
 # exist and win anyway. blend/gltf/mtlx: sidecars naming files the import
-# renames. rough_ao: rough x ao baked into one image, shipped beside both. It
-# matches roughness first and wins the tie on stem length, pushing the real
-# roughness into extra/ - dropped here rather than a slot rule made from one
-# vendor (porting.md, trap 8).
-SKIP_MAPS = {"blend", "gltf", "mtlx", "nor_dx", "arm", "rough_ao"}
+# renames. rough_ao / rough_diff: a second roughness-derived map shipped beside
+# the real one. It matches roughness first and wins the tie on stem length,
+# pushing the real roughness into extra/ - dropped here rather than a slot rule
+# made from one vendor (porting.md, trap 8).
+SKIP_MAPS = {"blend", "gltf", "mtlx", "nor_dx", "arm", "rough_ao", "rough_diff"}
 PAUSE_S = 1.0                            # between assets: courtesy, one stream already
 ATTEMPTS = 3
 
