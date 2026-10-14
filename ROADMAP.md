@@ -40,15 +40,19 @@
   test. No domain, no certificate lifecycle, no NAT rule, no port opened, and
   the server repo's "nothing exposed except through Tailscale" invariant intact.
 - `E2` **onboarding** — what a new reader needs before they can use that.
-  *Half done.* `tools/release.bat` builds the 293 MB app+runtime archive
-  (`9bc9042`) and **no archive has been built**; per-reader tokens are written
-  (`874f3f7`) and **the deploy to `/opt/assetlib` is queued, not confirmed**.
-  Until both land, a 26th reader means handing over a folder by hand and
-  sharing the one secret twenty-five people already hold.
+  **done 2026-10-14, and tested end to end by Felix**: downloaded the release,
+  unblocked, extracted, launched, activated with a token, administered a reader.
+  `tools/release.bat` (`9bc9042`, `64f371b`, `6510b19`) builds the archive from
+  a **commit**, not the working tree; `v2026.10.14` is published at 109.5 MB
+  with no address and no token in it; per-reader tokens (`874f3f7`) are deployed
+  and verified on the box. A 26th reader is now a public link plus two private
+  lines.
 - `E4` **resume that survives the timeout** — *planned 2026-10-14, not started.*
-  The two 12.8 GB scans cannot complete through the Funnel: 91 projected
-  minutes against gunicorn's 60-minute `--timeout`. **And the client makes it
-  worse than a failure** — see *Open bugs*. Five changes in dependency order:
+  A 12.8 GB asset is ~95 minutes of continuous streaming over a relay, and over
+  a window that long an interruption is the **expected** outcome rather than an
+  edge case. **And the client makes an interruption worse than a failure** — see
+  *Open bugs*. *(Not a gunicorn timeout: `--worker-class gthread` never caps a
+  request's duration, corrected 2026-10-14.)* Five changes in dependency order:
   (1) tell incomplete apart from corrupt, which alone makes the asset reachable
   by manual retries; (2) one exception type out of `fetch_file`, since the read
   loop's failures escape raw today; (3) the retry loop itself, bounded and only
@@ -346,9 +350,10 @@ thing in front rather than the thing being deferred.
 
 - **A truncated download is treated as corrupt, and its bytes are thrown
   away.** The real shape of the 12.8 GB problem, and worse than "it shows an
-  error". When gunicorn's worker is killed mid-transfer the socket closes
-  cleanly, so `resp.read()` returns `b''`, the read loop in `fetch_file` breaks
-  **normally**, and `fetch_file` returns with no exception at all. Then
+  error". When a transfer is interrupted and the socket closes **cleanly** —
+  rather than raising — `resp.read()` returns `b''`, the read loop in
+  `fetch_file` breaks **normally**, and `fetch_file` returns with no exception
+  at all. Then
   `materialise.py` hashes a part-file against the whole file's digest, gets
   "hash mismatch", and **unlinks it** — discarding ~8.6 GB. The comment above
   that `unlink` is right about corruption and wrong about truncation.

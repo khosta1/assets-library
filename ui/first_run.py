@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox,
                                QFormLayout, QFrame, QHBoxLayout, QLabel,
                                QLineEdit, QPushButton, QVBoxLayout)
 
-from assetlib import remote, shortcut
+from assetlib import houdini_pkg, remote, shortcut
 
 SETUP_DONE = "setup_seen"
 
@@ -74,6 +74,7 @@ class FirstRunDialog(QDialog):
         self.hosts: list = []
         self.sync_requested = False
         self.shortcut_requested = False
+        self.houdini_requested = False
         self.setWindowTitle("Set up your asset library")
         self.setMinimumWidth(620)
 
@@ -155,6 +156,26 @@ class FirstRunDialog(QDialog):
                                      and not shortcut.already_there())
         self.shortcut_box.setVisible(shortcut.available())
 
+        # Houdini package: offered when a supported Houdini is found and does
+        # not already load THIS copy. Ticked by default - except when Houdini
+        # loads another library that still exists, because a copy made for
+        # someone else must not take Houdini over silently. Said in the label.
+        self.houdini_box = QCheckBox()
+        todo, other = [], None
+        try:
+            for inst in houdini_pkg.status(cfg.base):
+                if inst.supported and inst.state != houdini_pkg.HERE:
+                    todo.append(inst.version)
+                    if inst.state == houdini_pkg.ELSEWHERE and inst.target_exists:
+                        other = inst.points_at
+        except Exception:                               # noqa: BLE001
+            todo = []                                   # never block a first launch
+        self.houdini_box.setText(
+            f"Install the Houdini package (Houdini {', '.join(todo)})"
+            + (f" - Houdini currently loads the library at {other}" if other else ""))
+        self.houdini_box.setChecked(bool(todo) and other is None)
+        self.houdini_box.setVisible(bool(todo))
+
         buttons = QDialogButtonBox()
         buttons.addButton("Finish", QDialogButtonBox.AcceptRole)
         buttons.addButton("Skip for now", QDialogButtonBox.RejectRole)
@@ -172,6 +193,7 @@ class FirstRunDialog(QDialog):
         layout.addLayout(test_row)
         layout.addWidget(self.sync_box)
         layout.addWidget(self.shortcut_box)
+        layout.addWidget(self.houdini_box)
         layout.addStretch(1)
         layout.addWidget(buttons)
 
@@ -220,4 +242,6 @@ class FirstRunDialog(QDialog):
             self.sync_requested = self.sync_box.isChecked()
         self.shortcut_requested = (self.shortcut_box.isVisible()
                                    and self.shortcut_box.isChecked())
+        self.houdini_requested = (self.houdini_box.isVisible()
+                                  and self.houdini_box.isChecked())
         self.accept()

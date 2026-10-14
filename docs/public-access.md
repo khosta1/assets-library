@@ -364,17 +364,28 @@ The *"1–2 MB/s, a 1 GB asset is ~17 minutes"* comment in `remote.py` — which
 every argument in this document leaned on — **remains unmeasured to this day.**
 Only a phone on mobile data can produce it.
 
-**The two 12.8 GB scans cannot complete through the Funnel.** 93.6 minutes
-against gunicorn's `--timeout 3600`, which is 60. The worker is killed
-mid-transfer at the one-hour mark, every time, and patience does not fix it.
+**The two 12.8 GB scans are ninety-five minutes of continuous streaming over a
+relay.** *(Corrected 2026-10-14. This first said the worker is killed at
+gunicorn's 60-minute `--timeout`, every time. **That is wrong** — gunicorn's own
+settings doc says the timeout "is not tied to the length of time required to
+handle a single request" for non-sync workers, and the box runs
+`--worker-class gthread`, whose request handling never reads `cfg.timeout`. The
+arbiter kills workers that go **silent**, not workers that stream for an hour
+and a half. There is no guillotine, and no `--timeout` change is needed.)*
+
+The real problem is better stated and worse: over a ninety-five-minute window an
+interruption is **the expected outcome, not an edge case** — a phone changing
+cells, a laptop sleeping, a café access point, the relay itself. That is exactly
+when the release notes' promise that *"the part already downloaded is kept"*
+matters, and exactly when it is false.
 
 ### What that makes of Range resume
 
 It stops being a nicety for flaky links and becomes **the only way those two
 assets ever arrive**. `materialise.py` already resumes correctly at the byte
 level — `.part` survives and the next attempt starts at its size — but **nothing
-retries**: when the worker is killed the exception leaves `materialise()` and
-the window reports a failure. The bytes are not lost, and a second attempt does
+retries**, and worse, an interrupted transfer that ends in a *clean* EOF rather
+than an exception has its `.part` **deleted**. The bytes are not lost, and a second attempt does
 resume, but the person has to know to try again and nothing tells them so.
 
 Open, and the halves belong to different sides:
@@ -382,8 +393,8 @@ Open, and the halves belong to different sides:
 - **client** — retry automatically, resuming from the new offset, bounded, and
   only while progress is being made. Retrying a transfer that moved zero bytes
   is a hang and not a drop, and looping on it would hide a real fault.
-- **box** — raise `--timeout`, but not to `0`: a genuinely hung worker should
-  still be reaped.
+- ~~**box** — raise `--timeout`.~~ **Not needed**, see the correction above.
+  Both halves of this are the client's.
 
 ---
 
@@ -399,8 +410,8 @@ findable. Audited 2026-10-14 by both sides:
 |---|---|
 | credentials in tracked files | **none.** No 64-hex literal anywhere; `hosts.json`, `api.env` and `tokens.json` are all untracked. **Nothing needed rotating** — the one outcome that would have been expensive. |
 | home public IPv4 | **was** in this file, one line. Redacted 2026-10-14. |
-| Funnel hostname | this file, and `server/reader` (fixed in `9da74cc` — now `ASSETLIB_PUBLIC_URL` from the environment with no default). |
-| the release archive | **does not carry the address.** Built without `--host-url`: no `hosts.json`, no hostname in `Start here.txt`. Verified by reading the published zip. |
+| Funnel hostname | **still in this file, and this file is public again** after `c16a7fc`. Out of `server/reader` (`9da74cc` — now `ASSETLIB_PUBLIC_URL` from the environment with no default). Not in the release archive. So: *not shipped, still published.* |
+| the release archive | **does not carry the address.** Built without `--host-url`: no `hosts.json`, no hostname in `Start here.txt`. Verified by reading the published zip rather than trusting the flag. **The home IPv4 is the one genuinely gone**; the hostname is merely not *shipped*. |
 | LAN / ZeroTier / path literals | `192.168.1.13`, `10.209.73.177`, `/srv/data2` in several files. Low value to a stranger; left alone rather than churning the repo. |
 
 **A redaction is not an un-publication.** Git history keeps what `HEAD` loses,

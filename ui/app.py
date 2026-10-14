@@ -243,6 +243,11 @@ class MainWindow(QMainWindow):
         desktop.triggered.connect(self._make_shortcut)
         desktop.setEnabled(shortcut.available())
         menu.addAction(desktop)
+        hpkg = QAction("Houdini package…", self)
+        hpkg.setToolTip("Install, update or remove the package that points "
+                        "Houdini at this library")
+        hpkg.triggered.connect(self._houdini_package)
+        menu.addAction(hpkg)
         newlib = QAction("Create a new library…", self)
         newlib.setToolTip("A fresh empty copy of this app on another disk")
         newlib.triggered.connect(self._new_library)
@@ -280,6 +285,8 @@ class MainWindow(QMainWindow):
         # Housekeeping with no deadline: it runs once the window is already up.
         thumbcache.sweep_async(cfg)
         self._sync_on_launch()
+        self._hpkg_warning = None
+        self._check_houdini_package()
 
         # Last, and only on a copy that has nothing. After the window is built,
         # not before: if the setup panel raised, a fresh install would show a
@@ -304,6 +311,8 @@ class MainWindow(QMainWindow):
             # quiet: a shortcut that could not be written must not be the first
             # thing a new user sees. The app works without it.
             self._make_shortcut(quiet=True)
+        if dialog.houdini_requested:
+            self._install_houdini_package()
         if not dialog.hosts:
             return
 
@@ -713,6 +722,56 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "Could not create the shortcut", str(exc))
             return
         self.statusBar().showMessage(f"shortcut created: {where}")
+
+    def _houdini_package(self) -> None:
+        from .houdini_package import HoudiniPackageDialog
+
+        HoudiniPackageDialog(self.cfg, self).exec()
+        self._check_houdini_package()
+
+    def _install_houdini_package(self) -> None:
+        """From the setup panel: every supported Houdini not already loading
+        this copy. Quiet on failure, like the shortcut: a first launch must open."""
+        from assetlib import houdini_pkg as hp
+
+        done = []
+        try:
+            for inst in hp.status(self.cfg.base):
+                if inst.supported and inst.state != hp.HERE:
+                    hp.install(self.cfg.base, inst.version)
+                    done.append(inst.version)
+        except Exception:                               # noqa: BLE001
+            pass
+        if done:
+            self.statusBar().showMessage(
+                f"Houdini package installed for {', '.join(done)} - restart Houdini to load it")
+        self._check_houdini_package()
+
+    def _check_houdini_package(self) -> None:
+        """Say so when a Houdini package points at a library that is gone.
+
+        What a moved disk does: the package was right when written and the drive
+        letter changed under it, and Houdini then loads nothing without a word.
+        A permanent status-bar widget, because temporary messages are replaced
+        by the next search; never a popup, and never fixed behind anyone's back.
+        """
+        from assetlib import houdini_pkg as hp
+
+        try:
+            lost = hp.stranded(self.cfg.base)
+        except Exception:                               # noqa: BLE001
+            lost = []
+        if self._hpkg_warning is not None:
+            self.statusBar().removeWidget(self._hpkg_warning)
+            self._hpkg_warning.deleteLater()
+            self._hpkg_warning = None
+        if not lost:
+            return
+        where = lost[0].points_at
+        label = QLabel(f"⚠ Houdini {', '.join(i.version for i in lost)}: package points at "
+                       f"{where}, which is gone - Library ▸ Houdini package…")
+        self._hpkg_warning = label
+        self.statusBar().addPermanentWidget(label)
 
     def _new_library(self) -> None:
         """Copy the app - not the assets - somewhere else. Lazily imported."""

@@ -28,7 +28,9 @@ def human(n) -> str:
 
 
 class _Signals(QObject):
-    progress = Signal(int, int, str)
+    # Bytes, so `object`: Signal(int) is C++ int32 and wraps negative past
+    # 2 GiB - one 16K HDRI or a four-resolution Megascans plant is enough.
+    progress = Signal(object, object, str)
     finished = Signal(dict)
     failed = Signal(str)
 

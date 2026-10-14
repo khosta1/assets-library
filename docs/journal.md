@@ -4,6 +4,144 @@ Newest first.
 
 ---
 
+## 2026-10-14 (last) — the library leaves the house
+
+Second entry today. Readers who are not on ZeroTier can now browse and download
+it, and Felix proved it himself: downloaded the release, unblocked, extracted,
+launched, activated with a token, administered a reader. The whole chain.
+
+**Done.**
+
+- **`E1` reach** — one `tailscale funnel --https=10000 127.0.0.1:8083`. Verified
+  from outside: `200`, 277 assets, 0.018 s, certificate valid, and the ts.net
+  name resolves here to Tailscale's public edge rather than the tailnet, so it
+  was a real external test and not a hairpin on the control plane.
+- **Per-reader tokens** (`874f3f7`) — labelled table at
+  `/etc/assetlib/tokens.json`, re-read on mtime so revoking needs no restart;
+  `ASSETLIB_TOKEN` kept and checked first, so the 25 existing clients were not
+  disturbed. Deployed and verified on the box by `server-a9`.
+- **`tools/release.bat`** (`9bc9042`, `64f371b`, `6510b19`) — the 293 MB app +
+  runtime archive. Packs a **commit** via a detached worktree, not the working
+  tree; `runtime/` comes from disk because no commit holds it; refuses to write
+  anything under `.assetlib/`, `library/`, `_cache/`, `.git/`; date tag,
+  `Start here.txt`, and an optional address with never a token.
+- **`v2026.10.14` published** — 109.5 MB, built from `6510b19`, **downloaded and
+  tested end to end**. Public release, address and token handed over privately.
+- **Throughput measured** (`630e17b`) — LAN 100.2 MB/s, Funnel 2.4 MB/s,
+  ZeroTier 100.5 MB/s. See *Decided*.
+- **Exposure audit + redaction** (`0517bc6`) — no credentials in any tracked
+  file, nothing to rotate; the home IPv4 removed from `public-access.md` and the
+  full record of what was published, and when, written into it.
+- **Docs untracked** (`8cdd8a4`) **and re-tracked an hour later** (`c16a7fc`,
+  `1448e54`). See *Decided*.
+- **`server-a9`'s, in this tree:** `1e2ed1e` the log level my audit trail needed,
+  `a3d6507` the gunicorn control socket, `e2e5371` `reader add|list|revoke`,
+  `18118c0` `reader list --json`, `9da74cc` the public URL out of source.
+
+**Decided.**
+
+- **Extend the Funnel rather than forward 443.** The plan was a domain, Caddy, a
+  certificate lifecycle and an SELinux boolean; the box already ran a Funnel, so
+  it was one command — and it keeps the server repo's invariant that nothing is
+  exposed except through Tailscale, which the direct route breaks outright.
+- **Publish the app, keep the address private.** GitHub has no "unlisted" for a
+  public repo, so the choice was real: the zip ships with no address and no
+  `hosts.json`, and the two private lines travel with the token.
+- **The tag is the date**, `v2026.10.14`, because `__version__` has read `0.1.0`
+  for sixty commits and a release named from it would be a number nobody
+  maintains.
+- **`docs/` stays public** — `decisions.md`, 2026-10-14. Hiding it cannot be
+  done in one repo, protected almost nothing because every pre-`8cdd8a4` copy is
+  still in the history, and cost 536 KB of memory versioned nowhere.
+- **The Funnel does NOT make object storage moot.** Both sessions predicted it
+  would. At 2.4 MB/s it is the same class as a relay, not a different one.
+
+**Open.**
+
+- **`E4` is not started, and the release notes are wrong because of it.** They
+  promise *"resume if interrupted — the part already downloaded is kept"*: true
+  for a cancelled transfer, **false for a killed worker**. The exact shape, so
+  nobody re-derives it: a transfer is interrupted, the socket closes **cleanly**
+  rather than raising, `resp.read()` returns `b''`, the read loop in
+  `fetch_file` breaks **normally** and returns with **no exception**; `materialise.py` then hashes a part-file
+  against the whole file's digest, gets a mismatch, and **unlinks it** —
+  discarding ~8.6 GB. `_verify()` only hashes and never compares size, and the
+  loop has `size` from the manifest at `materialise.py:194` and never uses it.
+  **The size check must land before the retry loop**, or the loop spins forever
+  instead of converging. Five changes in dependency order are in `ROADMAP.md`
+  `E4`, and **both halves are the client's** — see the correction below.
+  The reason it matters is not exotic: a 12.8 GB asset is ~95 minutes of
+  continuous streaming over a relay, and over a window that long an interruption
+  is the **expected** outcome, not an edge case.
+- **Two numbers still unmeasured.** The 2.4 MB/s is a **hairpin** — it spends
+  both legs of one connection where a real reader spends only the upload — so
+  the true figure is between 2.4 and roughly double. And the *"1–2 MB/s"* in
+  `remote.py` that every argument leaned on describes a **relayed** ZeroTier
+  link and has never been measured at all; both 100 MB/s readings were the LAN.
+- **Six files uncommitted from another session** at the time of writing — a
+  Houdini package installer (`assetlib/houdini_pkg.py`, `ui/houdini_package.py`,
+  menu wiring in `app.py`, touches to `first_run`, `import_remote`,
+  `sync_server`). Compiles; not mine; Felix has asked for it to be committed.
+- **`docs/public-access.md` may want to move** to `H:/Server` as a private copy
+  of record — `server-a9`'s suggestion, made while docs were untracked. Docs are
+  public again, so that needs Felix's word rather than mine. Not moved, not
+  deleted.
+- **`server/reader` now has a second consumer in another repo.** The server
+  panel's Assets tab shells out to `/opt/assetlib/server/reader` for
+  `list --json`, `add` and `revoke`, so its **flags and its JSON are a cross-repo
+  contract**: change them and a tab in `H:/Server` breaks silently, with no
+  import error and nothing to catch it. That is why `18118c0` exists — the panel
+  must never parse the human sentence, because the day someone improves its
+  wording is the day the tab breaks. The panel also enforces the asymmetry in
+  the **route** rather than the template: minting is open to anyone who reaches
+  it, revoking returns 403 off the LAN.
+- **The Livebox NAT rule is still enabled**, forwarding 443 to a device nobody
+  has identified — two machines on that LAN are called `braucoly`, and only the
+  Livebox UI can say which is `braucoly-1` (`70:85:c2:46:aa:9f` is the box). The
+  Funnel needs no NAT at all, so it should simply be unticked.
+- Carried: ~60 *hashed file missing* on older packages, `.tx`/`.usda` untouched,
+  `A4` and `A5` unobserved in Houdini, `refresh_from_source()` unbuilt, three
+  `reference/` assets to re-import.
+
+**Wrong turns worth keeping.**
+
+- **I wrote Felix's home IPv4 into a tracked file in a public repo**, in the same
+  conversation where I told him not to paste it anywhere public. The exposure
+  check ran **once**, at the first push, before that file existed, and was never
+  repeated as the repository grew. `server-a9` found it. A repository that
+  becomes public does not stay audited.
+- **My audit trail did not exist.** Both new log lines were `app.logger.info()`
+  and nothing configured logging, so Flask dropped them — leaving the worst
+  state available: believing there is a record of who pulled what, and having
+  none. `server-a9` caught it before deploying (gotcha 23).
+- **I bet twice that the Funnel would make the CDN argument moot.** It does not.
+- A heredoc collapsed `
+` into real newlines **three times**, each time
+  aborting an edit script mid-run while a `git commit` on the next line
+  succeeded anyway. And I stamped a commit's own sha into a file inside it, then
+  amended, which broke the reference — a commit cannot cite itself.
+
+**Corrected after writing, by the box side.** This entry first said a 12.8 GB
+transfer is killed by gunicorn's 60-minute `--timeout`. **It is not.** gunicorn's
+settings doc: for non-sync workers the timeout *"is not tied to the length of
+time required to handle a single request"*, and `--worker-class gthread` never
+reads `cfg.timeout` in request handling — the arbiter kills workers that go
+**silent**, not ones streaming for ninety-five minutes. No `--timeout` change is
+needed and nothing on the box has to move. The bug is unchanged and so is its
+priority; only my stated trigger was wrong, and the honest trigger is worse
+because it is ordinary.
+
+**Next.** `E4`, and the size check before the retry loop. It is the only place
+where something already published is actively misleading.
+
+**And one thing ahead of all of it, which is Felix's and not code.** There are
+**zero named readers**. The shared token is live, twenty-five people hold it,
+and it now sits behind a public URL. Everything built today is deployed and
+unused, and `reader add <name>` is one command. No code item outranks that, and
+no code item can fix it.
+
+---
+
 ## 2026-10-14 — 147 from Poly Haven
 
 One session running from 10-05, with two others working on the same tree

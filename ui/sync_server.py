@@ -35,7 +35,10 @@ ITEM_ROLE = Qt.UserRole + 1
 class _Signals(QObject):
     step = Signal(int, str)             # scanned so far, what it is reading
     scanned = Signal(object)            # a sync.Plan
-    progress = Signal(int, int, str)    # bytes done, total, current asset
+    # Bytes as `object`, not `int`: a Signal(int) is C++ int32, so a total past
+    # 2 GiB wrapped - the 32 GB Poly Haven push read "212.7 MB / -2081942048 B".
+    # object hands Python's unbounded int through untouched.
+    progress = Signal(object, object, str)    # bytes done, total, current asset
     finished = Signal(dict)
     failed = Signal(str)
 

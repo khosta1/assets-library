@@ -454,3 +454,45 @@ the first on the path. Harmless in 21; in 22 it must hand every drag that is
 not ours to `nodegraphdrop` exactly as theirs does, or every other package's
 drop handlers go dark. Diff it against `$HFS/houdini/scripts/nodegraph/dragdrop.py`
 on every Houdini update.
+
+---
+
+**23. The audit trail that did not exist** — 2026-10-14
+
+Per-reader tokens were added so that "who pulled that asset" had an answer. Two
+`app.logger.info()` calls were the answer: one for the token table reloading,
+one naming the reader behind every file transfer.
+
+Neither would ever have appeared. **Nothing in `server/api.py` configured
+logging**, and Flask's own documentation is explicit: *if logging is
+unconfigured, messages below `warning` do not appear.* So the `401` warnings
+would have shown and the two lines that mattered would not.
+
+**Cause.** `app.logger` exists on every Flask app and accepts every call, so
+nothing fails, nothing warns, and the code reads correctly. The default level is
+`WARNING`, inherited from the root logger, and `INFO` is simply dropped.
+
+**Fix.** One line after the app is created:
+
+```python
+app.logger.setLevel(logging.INFO)
+```
+
+Found by the box session before deploying, and confirmed on the box
+(`1e2ed1e`):
+
+```
+INFO in api: file /api/file/26b7d161…/asset.json <- shared
+```
+
+**Why it is worth a number.** The failure state is the worst one available:
+**believing there is a record and having none.** A missing audit line is not a
+crash, not a warning, and not visible in any test that does not go looking for
+it — and the record was the entire justification for the change. A verify step
+that checked for the line would have failed looking like a deploy fault rather
+than a missing log level.
+
+**RULE. A log line is not evidence until something has read it back.** Anything
+written for an audit gets checked at the destination, once, by eye — not
+asserted from the fact that the call is in the source.
+
