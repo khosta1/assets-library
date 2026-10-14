@@ -137,6 +137,11 @@ committed.
 - **Multi-select import to Houdini** — select a shelf of assets, one
   options dialog, all built. Options are read from the FIRST asset; the
   dialog says so. Non-mesh assets are skipped.
+- **`fetch_polyhaven.py`** — added 2026-10-14. Fetches one Poly Haven texture
+  category into `_inbox/polyhaven/`, serial, md5-checked, resumable. A
+  fetcher, not a front-end (`decisions.md`, Reversed). Its logic ran for
+  Ground & Terrain from a scratchpad copy; the repo version (category as an
+  argument, roots read from config) has not run yet.
 - **Sidebar category groups** — added 2026-10-14, *built, not yet observed*.
   `groups` in `categories.json` nests categories under a heading in the
   sidebar (`texture ▸ ground_and_terrain ▸ dirt, sand, …`); the group node

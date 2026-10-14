@@ -101,12 +101,17 @@ def build_plan(cfg, root: Path, declarations: dict) -> dict:
         if not files:
             skipped.append([folder.name, "empty folder"])
             continue
-        if not any(p.suffix.lower() in (".fbx", ".gltf") for p in files):
+        dec = declarations.get(folder.name)
+        # Mesh required only of a mesh type. The gate was written for Fab, all
+        # meshes, and read every Poly Haven texture set as "no mesh". An
+        # undeclared folder keeps the old answer, so nothing Fab saw changes.
+        tdef = cfg.type_by_id.get(dec["type"], {}) if dec else {}
+        needs_mesh = not dec or tdef.get("ingest") == "mesh_plus_textures"
+        if needs_mesh and not any(p.suffix.lower() in (".fbx", ".gltf") for p in files):
             why = ("usdz only" if any(p.suffix.lower() == ".usdz" for p in files)
                    else "no mesh")
             skipped.append([folder.name, why])
             continue
-        dec = declarations.get(folder.name)
         if not dec:
             skipped.append([folder.name, "NO DECLARATION - add one with `set`"])
             continue

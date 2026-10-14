@@ -14,7 +14,13 @@ which is what `config/texture_slots.json` and `config/types.json` encode.
 
 **Poly Haven** — `rock_wall_02_diff_8k.jpg`, `_nor_gl_`, `_rough_`, `_ao_`.
 The `_diff_` form is why gotcha 2 exists: it was missing from the diffuse
-keywords and basecolors fell through unmatched.
+keywords and basecolors fell through unmatched. Seen on the 2026-10-14 fetch:
+`_disp_`, `_spec_` and `_bump_` (the mud family), `_ref_` (no slot, goes to
+`extra/`), and `_rough_ao_` — roughness × AO in one image beside both, which
+wins the roughness slot on a tie and is therefore not fetched. Also ships
+`_nor_dx_` and a packed `_arm_`, neither fetched. Sizes 1k–8k on every
+texture, 16k on about a quarter. A public **API** with CC0 assets, real-world
+`dimensions` in mm and its own category tree — `docs/polyhaven.md`.
 
 **Quixel / Megascans** — LOD tokens in the filename (`_LOD0`…`_LOD3`),
 multi-format delivery of the same slot, `.mtlx` sidecars. The source of the

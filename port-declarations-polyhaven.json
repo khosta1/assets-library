@@ -1,0 +1,593 @@
+{
+  "root": "H:/Code/Assets_library/_inbox/polyhaven/ground-terrain",
+  "assets": {
+    "aerial_beach_01": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "aerial_beach_02": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "aerial_beach_03": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "aerial_ground_rock": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "aerial_mud_1": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "aerial_sand": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "aerial_wood_snips": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "baseball_playground": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "bicolour_gravel": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "brick_gravel": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "brown_mud": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "brown_mud_02": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "brown_mud_03": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "brown_mud_dry": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "brown_mud_leaves_01": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "brown_mud_rocks_01": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "burned_ground_01": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "clean_pebbles": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "coast_sand_01": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "coast_sand_02": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "coast_sand_03": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "coast_sand_04": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "coast_sand_05": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "concrete_rock_path": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "coral_gravel": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "coral_ground_02": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "coral_mud_01": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "cracked_red_ground": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "damp_beach_sand": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "damp_beach_sand_02": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "damp_sand": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "dense_sand": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "dirt": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "dirt_aerial_02": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "dirt_aerial_03": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "dirt_floor": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "dry_decay_leaves": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "dry_ground_01": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "dry_ground_rocks": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "dry_mud_field_001": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "dry_river_pebbles": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "excavated_soil_wall": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "farm_furrows": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "farm_soil": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "floor_pebbles_01": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "flower_scattered_dirt": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "flower_scattered_gravel": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "forest_floor": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "forest_ground_04": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "forest_ground_05": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "forest_ground_06": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "forest_leaves_02": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "forest_leaves_03": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "forest_leaves_04": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "forrest_ground_01": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "forrest_ground_03": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "forrest_sand_01": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "ganges_river_pebbles": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "grass_ground": {
+      "type": "texture",
+      "category": "grass"
+    },
+    "grass_path_2": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "grass_path_3": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "gravel": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "gravel_floor": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "gravel_floor_02": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "gravel_floor_03": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "gravel_floor_04": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "gravel_ground_01": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "gravel_stones": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "gravelly_sand": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "gray_rocks": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "ground_grey": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "leaf_scattered_gravel": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "leafy_grass": {
+      "type": "texture",
+      "category": "grass"
+    },
+    "leaves_forest_ground": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "low_tide_rocks": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "moon_01": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_02": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_03": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_04": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_dusted_01": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_dusted_02": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_dusted_03": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_dusted_04": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_dusted_05": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_flat_macro_01": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_flat_macro_02": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_footprints_01": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_footprints_02": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_macro_01": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_meteor_01": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_meteor_02": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_track_01": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_track_02": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_track_03": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "moon_track_04": {
+      "type": "texture",
+      "category": "regolith"
+    },
+    "mud_cracked_dry_03": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "mud_cracked_dry_riverbed_002": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "muddy_tracks": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "park_dirt": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "park_sand": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "pebble_ground_01": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "pebbles": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "playground_sand": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "raked_dirt": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "red_dirt_mud_01": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "red_laterite_soil_stones": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "red_mud_stones": {
+      "type": "texture",
+      "category": "dirt"
+    },
+    "red_sand": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "river_small_rocks": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "rock_ground": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "rock_ground_02": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "rock_path": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "rocks_ground_01": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "rocks_ground_02": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "rocks_ground_03": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "rocks_ground_04": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "rocks_ground_05": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "rocks_ground_06": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "rocks_ground_08": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "rocks_ground_09": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "rocky_gravel": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "rocky_terrain": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "rocky_terrain_03": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "rocky_trail": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "rocky_trail_02": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "roots": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "sand_01": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "sand_02": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "sand_03": {
+      "type": "texture",
+      "category": "sand"
+    },
+    "sandy_gravel": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "sandy_gravel_02": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "shell_floor_01": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "snow_01": {
+      "type": "texture",
+      "category": "snow"
+    },
+    "snow_02": {
+      "type": "texture",
+      "category": "snow"
+    },
+    "snow_03": {
+      "type": "texture",
+      "category": "snow"
+    },
+    "snow_04": {
+      "type": "texture",
+      "category": "snow"
+    },
+    "snow_05": {
+      "type": "texture",
+      "category": "snow"
+    },
+    "snow_field_aerial": {
+      "type": "texture",
+      "category": "snow"
+    },
+    "snow_floor": {
+      "type": "texture",
+      "category": "snow"
+    },
+    "sparse_grass": {
+      "type": "texture",
+      "category": "grass"
+    },
+    "stony_dirt_path": {
+      "type": "texture",
+      "category": "rocky_ground"
+    },
+    "terrain_red_01": {
+      "type": "texture",
+      "category": "gravel"
+    },
+    "winter_leaves": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "withered_grass": {
+      "type": "texture",
+      "category": "grass"
+    },
+    "wood_chip_path": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "wood_chips": {
+      "type": "texture",
+      "category": "forest_floor"
+    },
+    "yellow_flower_mulch": {
+      "type": "texture",
+      "category": "forest_floor"
+    }
+  }
+}
