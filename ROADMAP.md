@@ -311,9 +311,12 @@ thing in front rather than the thing being deferred.
   not yet seen there.
 - **Local tiles show `?` until F5.** Rows indexed before `slots`, `variants`
   and `lods` existed are NULL; the status bar says so while Details is on.
-- **Server tiles show `?` until the box is updated.** Needs `assetlib/index.py`
-  and `server/api.py` on `/opt/assetlib` together, then a re-index. Not done:
-  the box is touched only when asked by name.
+- **Box updated 2026-10-14 17:55, asked by Felix** — `git archive` of
+  `93842b5` (`assetlib`, `config`, `server`), the box having run 2026-09-12
+  code until then. Pre-flight import under the box's venv, restart, re-index:
+  130 assets, 0 failed, all three columns filled; `/api/catalog` serves them.
+  Rollback: `/opt/assetlib/backup-2026-10-14-pre-93842b5.tgz`. A client sees
+  the new rows after its next catalogue sync (launch, or Shift+F5).
 
 **Open from 2026-10-14** (texture set → material):
 
