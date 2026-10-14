@@ -30,6 +30,8 @@ Run:
 from __future__ import annotations
 
 import argparse
+import datetime
+import json
 import shutil
 import subprocess
 import sys
@@ -113,6 +115,76 @@ def _release_worktree(tmp: Path, tree: Path) -> None:
     shutil.rmtree(tmp, ignore_errors=True)
 
 
+def tag_for_today() -> str:
+    """v2026.10.14. Date-based, because `__version__` is not maintained.
+
+    `assetlib.__version__` has read 0.1.0 across sixty commits, so a release
+    named from it would be a number nobody updates attached to code that
+    changed. A date is true without anybody keeping it true, and the commit is
+    carried in the release notes for anyone who needs to be exact.
+    """
+    d = datetime.date.today()
+    return f"v{d.year}.{d.month:02d}.{d.day:02d}"
+
+
+def _start_here(url: str) -> bytes:
+    """The file that stops Windows quietly killing this for a beginner.
+
+    A zip holding python.exe and a .vbs, downloaded from the internet, carries
+    Mark-of-the-Web; extracted files inherit it and the .vbs can be blocked with
+    no error worth reading. `docs/decisions.md` rejected a frozen .exe partly
+    over the same SmartScreen problem - this is its milder form, and ignoring it
+    means the folder simply does not start for exactly the person it is for.
+    """
+    where = url or "(ask whoever gave you this)"
+    lines = [
+        "ASSET LIBRARY - start here",
+        "",
+        "1. BEFORE EXTRACTING: right-click the .zip you downloaded, choose",
+        "   Properties, tick Unblock at the bottom, then OK. Windows marks",
+        "   anything from the internet and will otherwise refuse to run the",
+        "   launcher without telling you why.",
+        "",
+        "2. Extract the folder anywhere - an external disk is fine, it is",
+        "   designed to be portable.",
+        "",
+        "3. Double-click 'Asset Library.vbs'. Nothing is installed: no Python,",
+        "   no admin rights, no dependencies. The runtime travels inside.",
+        "",
+        "4. A setup panel appears. You need two things:",
+        f"      Address   {where}",
+        "      Token     your own - ask for it, it is not in this download",
+        "",
+        "5. Press Shift+F5. The catalogue arrives and the grid fills with",
+        "   assets held on the server. Right-click one, 'Import from the",
+        "   server...', and it downloads to this folder.",
+        "",
+        "You have read-only access: browse, search, download. You cannot change",
+        "or delete anything on the server, and nothing you do here affects",
+        "anybody else.",
+        "",
+        "A big asset can take a while and resumes if it is interrupted - the",
+        "part already downloaded is kept.",
+    ]
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
+def _host_json(url: str) -> bytes:
+    """A server entry with the address filled in and NO token.
+
+    SYNTHESISED, never copied. `.assetlib/` on this machine holds the real
+    token and is in FORBIDDEN for that reason; this writes a fresh file so the
+    reader finds the address already typed and is asked for one thing instead
+    of two. `first_run` treats a host with no token as not-configured-yet, so
+    the panel still appears - the same arrangement `deploy.suggest_host` makes
+    for a copy handed over on a disk.
+    """
+    return (json.dumps({"hosts": [{
+        "name": "rocky", "url": url, "token": "",
+        "enabled": True, "share": "", "ssh": "",
+    }]}, indent=2) + "\n").encode("utf-8")
+
+
 def _unsafe(names) -> list:
     """Archive paths that must never be published, whatever the rules upstream say."""
     out = []
@@ -171,7 +243,7 @@ def _entries(ref: str, working_tree: bool):
 
 
 def build(dry_run: bool = False, out_dir=None, ref: str = "HEAD",
-          working_tree: bool = False) -> int:
+          working_tree: bool = False, tag: str = "", host_url: str = "") -> int:
     pairs, total, tmp, tree = _entries(ref, working_tree)
     try:
         if not pairs:
@@ -191,12 +263,17 @@ def build(dry_run: bool = False, out_dir=None, ref: str = "HEAD",
                   "Fix it there, not here.")
             return 2
 
-        if working_tree:
-            tag = version()
-        else:
-            tag = _git("rev-parse", "--short", ref) or "nogit"
+        sha = version() if working_tree else (_git("rev-parse", "--short", ref)
+                                              or "nogit")
+        tag = tag or tag_for_today()
 
-        print(f"{len(pairs)} files, {human(total)} uncompressed, from {tag}")
+        print(f"{len(pairs)} files, {human(total)} uncompressed, "
+              f"{tag} from {sha}")
+        if host_url:
+            print(f"  address baked in: {host_url}  (no token - never a token)")
+        else:
+            print("  no address baked in - the reader types it as well as the "
+                  "token")
         if working_tree:
             print("  packing the WORKING TREE - whatever is on disk right now, "
                   "including anything another session is mid-edit on")
@@ -233,6 +310,10 @@ def build(dry_run: bool = False, out_dir=None, ref: str = "HEAD",
                     print(f"   {done}/{len(pairs)}")
             for name in EMPTY_ROOTS:
                 zf.writestr(zipfile.ZipInfo(f"{FOLDER}/{name}/"), b"")
+            zf.writestr(f"{FOLDER}/Start here.txt", _start_here(host_url))
+            if host_url:
+                zf.writestr(f"{FOLDER}/.assetlib/remote/hosts.json",
+                            _host_json(host_url))
 
         print(f"\nwrote {target}  ({human(target.stat().st_size)})")
         print("Attach it to a GitHub release. A reader unzips it, runs "
@@ -253,10 +334,17 @@ def main() -> int:
                     help="pack what is on disk instead of a commit - for a "
                          "local look, never for a release")
     ap.add_argument("--out", default="", help="directory for the zip")
+    ap.add_argument("--tag", default="",
+                    help="release tag (default: today, v2026.10.14)")
+    ap.add_argument("--host-url", default="",
+                    help="bake this server address into the copy, with NO "
+                         "token. Omit and the reader types the address too - "
+                         "which keeps the address out of a public download")
     args = ap.parse_args()
     return build(dry_run=args.dry_run,
                  out_dir=Path(args.out) if args.out else None,
-                 ref=args.ref, working_tree=args.working_tree)
+                 ref=args.ref, working_tree=args.working_tree,
+                 tag=args.tag, host_url=args.host_url)
 
 
 if __name__ == "__main__":
